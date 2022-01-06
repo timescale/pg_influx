@@ -1,0 +1,6 @@
+SELECT split_pair('foo=bar');
+ split_pair 
+------------
+ (foo,bar)
+(1 row)
+
