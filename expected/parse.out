@@ -1,6 +1,85 @@
-SELECT split_pair('foo=bar');
- split_pair 
-------------
- (foo,bar)
+SELECT * FROM parse_influx(E'measurement,tag=foo field=12 12345');
+   _metric   | _time |     _tags      |     _fields     
+-------------+-------+----------------+-----------------
+ measurement | 12345 | {"tag": "foo"} | {"field": "12"}
 (1 row)
+
+SELECT * FROM parse_influx(E'measurement,tag=\\"foo field=12 12345');
+   _metric   | _time |      _tags       |     _fields     
+-------------+-------+------------------+-----------------
+ measurement | 12345 | {"tag": "\"foo"} | {"field": "12"}
+(1 row)
+
+SELECT * FROM parse_influx(E'measurement,tag=foo field=12 12345\nmeasurement,tag=bar field=12 12346');
+   _metric   | _time |     _tags      |     _fields     
+-------------+-------+----------------+-----------------
+ measurement | 12345 | {"tag": "foo"} | {"field": "12"}
+ measurement | 12346 | {"tag": "bar"} | {"field": "12"}
+(2 rows)
+
+SELECT * FROM parse_influx(E'myMeasurement,tag1=value1,tag2=value2 fieldKey="fieldValue" 1556813561098000000');
+    _metric    |        _time        |                _tags                 |          _fields           
+---------------+---------------------+--------------------------------------+----------------------------
+ myMeasurement | 1556813561098000000 | {"tag1": "value1", "tag2": "value2"} | {"fieldKey": "fieldValue"}
+(1 row)
+
+SELECT * FROM parse_influx(E'myMeasurementName fieldKey="fieldValue" 1556813561098000000');
+      _metric      |        _time        | _tags |          _fields           
+-------------------+---------------------+-------+----------------------------
+ myMeasurementName | 1556813561098000000 | {}    | {"fieldKey": "fieldValue"}
+(1 row)
+
+SELECT * FROM parse_influx(E'myMeasurementName fieldKey="fieldValue" 1556813561098000000\nmyMeasurement,tag1=value1,tag2=value2 fieldKey="fieldValue" 1556813561098000000');
+      _metric      |        _time        |                _tags                 |          _fields           
+-------------------+---------------------+--------------------------------------+----------------------------
+ myMeasurementName | 1556813561098000000 | {}                                   | {"fieldKey": "fieldValue"}
+ myMeasurement     | 1556813561098000000 | {"tag1": "value1", "tag2": "value2"} | {"fieldKey": "fieldValue"}
+(2 rows)
+
+\set ON_ERROR_STOP OFF
+SELECT * FROM parse_influx(E'measurement,tag field=12 12345');
+ERROR:  unexpected character
+DETAIL:  expected '=' at position 15, saw ' '
+SELECT * FROM parse_influx(E'measurement, field=12 12345');
+ERROR:  identifier expected
+DETAIL:  expected identifier at position 12, found ' '
+SELECT * FROM parse_influx(E'measurement 12345');
+ERROR:  identifier expected
+DETAIL:  expected identifier at position 12, found '1'
+\set ON_ERROR_STOP ON
+CREATE TABLE lines(line text);
+\copy lines from 'cpu.txt'
+SELECT parse_influx(line) FROM lines;
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   parse_influx                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (cpu,1574753954000000000,"{""cpu"": ""cpu0"", ""host"": ""mats-XPS-13-9380""}","{""usage_irq"": ""0"", ""usage_idle"": ""95.91836734330231"", ""usage_nice"": ""0"", ""usage_user"": ""2.0408163264927324"", ""usage_guest"": ""0"", ""usage_steal"": ""0"", ""usage_iowait"": ""0"", ""usage_system"": ""2.0408163264927324"", ""usage_softirq"": ""0"", ""usage_guest_nice"": ""0""}")
+ (cpu,1574753954000000000,"{""cpu"": ""cpu1"", ""host"": ""mats-XPS-13-9380""}","{""usage_irq"": ""0"", ""usage_idle"": ""92.1568627436434"", ""usage_nice"": ""0"", ""usage_user"": ""3.9215686274649673"", ""usage_guest"": ""0"", ""usage_steal"": ""0"", ""usage_iowait"": ""0"", ""usage_system"": ""3.921568627286635"", ""usage_softirq"": ""0"", ""usage_guest_nice"": ""0""}")
+ (cpu,1574753954000000000,"{""cpu"": ""cpu2"", ""host"": ""mats-XPS-13-9380""}","{""usage_irq"": ""0"", ""usage_idle"": ""90.74074073814575"", ""usage_nice"": ""0"", ""usage_user"": ""3.7037037035290408"", ""usage_guest"": ""0"", ""usage_steal"": ""0"", ""usage_iowait"": ""0"", ""usage_system"": ""3.703703703360616"", ""usage_softirq"": ""1.8518518517645204"", ""usage_guest_nice"": ""0""}")
+ (cpu,1574753954000000000,"{""cpu"": ""cpu3"", ""host"": ""mats-XPS-13-9380""}","{""usage_irq"": ""0"", ""usage_idle"": ""96.00000000209548"", ""usage_nice"": ""0"", ""usage_user"": ""2.0000000000436557"", ""usage_guest"": ""0"", ""usage_steal"": ""0"", ""usage_iowait"": ""0"", ""usage_system"": ""2.0000000000436557"", ""usage_softirq"": ""0"", ""usage_guest_nice"": ""0""}")
+ (cpu,1574753954000000000,"{""cpu"": ""cpu4"", ""host"": ""mats-XPS-13-9380""}","{""usage_irq"": ""0"", ""usage_idle"": ""91.83673469254418"", ""usage_nice"": ""0"", ""usage_user"": ""8.163265305599708"", ""usage_guest"": ""0"", ""usage_steal"": ""0"", ""usage_iowait"": ""0"", ""usage_system"": ""0"", ""usage_softirq"": ""0"", ""usage_guest_nice"": ""0""}")
+ (cpu,1574753954000000000,"{""cpu"": ""cpu5"", ""host"": ""mats-XPS-13-9380""}","{""usage_irq"": ""0"", ""usage_idle"": ""97.95918367165116"", ""usage_nice"": ""0"", ""usage_user"": ""0"", ""usage_guest"": ""0"", ""usage_steal"": ""0"", ""usage_iowait"": ""0"", ""usage_system"": ""2.0408163264927324"", ""usage_softirq"": ""0"", ""usage_guest_nice"": ""0""}")
+ (cpu,1574753954000000000,"{""cpu"": ""cpu6"", ""host"": ""mats-XPS-13-9380""}","{""usage_irq"": ""0"", ""usage_idle"": ""96.00000000186265"", ""usage_nice"": ""0"", ""usage_user"": ""3.9999999999563443"", ""usage_guest"": ""0"", ""usage_steal"": ""0"", ""usage_iowait"": ""0"", ""usage_system"": ""0"", ""usage_softirq"": ""0"", ""usage_guest_nice"": ""0""}")
+ (cpu,1574753954000000000,"{""cpu"": ""cpu7"", ""host"": ""mats-XPS-13-9380""}","{""usage_irq"": ""0"", ""usage_idle"": ""94.00000000023283"", ""usage_nice"": ""0"", ""usage_user"": ""4.0000000000873115"", ""usage_guest"": ""0"", ""usage_steal"": ""0"", ""usage_iowait"": ""0"", ""usage_system"": ""2.0000000000436557"", ""usage_softirq"": ""0"", ""usage_guest_nice"": ""0""}")
+ (cpu,1574753954000000000,"{""cpu"": ""cpu-total"", ""host"": ""mats-XPS-13-9380""}","{""usage_irq"": ""0"", ""usage_idle"": ""93.38235294084079"", ""usage_nice"": ""0"", ""usage_user"": ""3.921568627108303"", ""usage_guest"": ""0"", ""usage_steal"": ""0"", ""usage_iowait"": ""0.24509803921656045"", ""usage_system"": ""1.9607843135541514"", ""usage_softirq"": ""0.4901960784331209"", ""usage_guest_nice"": ""0""}")
+ (disk,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""mode"": ""rw"", ""path"": ""/"", ""device"": ""nvme0n1p2"", ""fstype"": ""ext4""}","{""free"": ""912578965504i"", ""used"": ""42751348736i"", ""total"": ""1006530654208i"", ""inodes_free"": ""61635422i"", ""inodes_used"": ""844962i"", ""inodes_total"": ""62480384i"", ""used_percent"": ""4.475033200428718""}")
+ (disk,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""mode"": ""rw"", ""path"": ""/boot/efi"", ""device"": ""nvme0n1p1"", ""fstype"": ""vfat""}","{""free"": ""527806464i"", ""used"": ""7999488i"", ""total"": ""535805952i"", ""inodes_free"": ""0i"", ""inodes_used"": ""0i"", ""inodes_total"": ""0i"", ""used_percent"": ""1.4929822952022749""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""nvme0n1p2""}","{""reads"": ""6129866i"", ""writes"": ""2290766i"", ""io_time"": ""2595292i"", ""read_time"": ""8109392i"", ""read_bytes"": ""309936706560i"", ""write_time"": ""37212815i"", ""write_bytes"": ""80954531840i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""39313044i""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""loop1""}","{""reads"": ""269i"", ""writes"": ""0i"", ""io_time"": ""108i"", ""read_time"": ""72i"", ""read_bytes"": ""1316864i"", ""write_time"": ""0i"", ""write_bytes"": ""0i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""32i""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""loop4""}","{""reads"": ""47i"", ""writes"": ""0i"", ""io_time"": ""20i"", ""read_time"": ""5i"", ""read_bytes"": ""351232i"", ""write_time"": ""0i"", ""write_bytes"": ""0i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""0i""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""loop6""}","{""reads"": ""48370i"", ""writes"": ""0i"", ""io_time"": ""5184i"", ""read_time"": ""75687i"", ""read_bytes"": ""50564096i"", ""write_time"": ""0i"", ""write_bytes"": ""0i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""68692i""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""nvme0n1""}","{""reads"": ""6132370i"", ""writes"": ""2333085i"", ""io_time"": ""2599684i"", ""read_time"": ""8152676i"", ""read_bytes"": ""309946164224i"", ""write_time"": ""37254690i"", ""write_bytes"": ""80954532864i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""39387288i""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""nvme0n1p1""}","{""reads"": ""2397i"", ""writes"": ""2i"", ""io_time"": ""152i"", ""read_time"": ""42986i"", ""read_bytes"": ""6955008i"", ""write_time"": ""0i"", ""write_bytes"": ""1024i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""42616i""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""loop0""}","{""reads"": ""779i"", ""writes"": ""0i"", ""io_time"": ""264i"", ""read_time"": ""51i"", ""read_bytes"": ""1100800i"", ""write_time"": ""0i"", ""write_bytes"": ""0i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""0i""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""loop2""}","{""reads"": ""481841i"", ""writes"": ""0i"", ""io_time"": ""79952i"", ""read_time"": ""1409949i"", ""read_bytes"": ""493705216i"", ""write_time"": ""0i"", ""write_bytes"": ""0i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""811912i""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""loop3""}","{""reads"": ""803i"", ""writes"": ""0i"", ""io_time"": ""216i"", ""read_time"": ""124i"", ""read_bytes"": ""1125376i"", ""write_time"": ""0i"", ""write_bytes"": ""0i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""76i""}")
+ (diskio,1574753954000000000,"{""host"": ""mats-XPS-13-9380"", ""name"": ""loop5""}","{""reads"": ""1672i"", ""writes"": ""0i"", ""io_time"": ""204i"", ""read_time"": ""191i"", ""read_bytes"": ""2736128i"", ""write_time"": ""0i"", ""write_bytes"": ""0i"", ""iops_in_progress"": ""0i"", ""weighted_io_time"": ""0i""}")
+ (kernel,1574753954000000000,"{""host"": ""mats-XPS-13-9380""}","{""boot_time"": ""1574146313i"", ""interrupts"": ""838000993i"", ""entropy_avail"": ""3797i"", ""context_switches"": ""1659702661i"", ""processes_forked"": ""430825i""}")
+ (mem,1574753954000000000,"{""host"": ""mats-XPS-13-9380""}","{""free"": ""2134585344i"", ""slab"": ""595992576i"", ""used"": ""6185308160i"", ""dirty"": ""864256i"", ""total"": ""16478502912i"", ""wired"": ""0i"", ""active"": ""8663875584i"", ""cached"": ""8126435328i"", ""mapped"": ""5682855936i"", ""shared"": ""7086600192i"", ""buffered"": ""32174080i"", ""inactive"": ""4678496256i"", ""low_free"": ""0i"", ""available"": ""2632663040i"", ""high_free"": ""0i"", ""low_total"": ""0i"", ""swap_free"": ""658169856i"", ""high_total"": ""0i"", ""swap_total"": ""2147479552i"", ""write_back"": ""0i"", ""page_tables"": ""80105472i"", ""swap_cached"": ""55185408i"", ""commit_limit"": ""10386731008i"", ""committed_as"": ""26931036160i"", ""used_percent"": ""37.53561954645604"", ""vmalloc_used"": ""0i"", ""vmalloc_chunk"": ""0i"", ""vmalloc_total"": ""35184372087808i"", ""huge_page_size"": ""2097152i"", ""write_back_tmp"": ""0i"", ""huge_pages_free"": ""0i"", ""huge_pages_total"": ""0i"", ""available_percent"": ""15.976348422300173""}")
+ (processes,1574753954000000000,"{""host"": ""mats-XPS-13-9380""}","{""dead"": ""0i"", ""idle"": ""68i"", ""total"": ""367i"", ""paging"": ""0i"", ""blocked"": ""0i"", ""running"": ""1i"", ""stopped"": ""0i"", ""unknown"": ""0i"", ""zombies"": ""0i"", ""sleeping"": ""298i"", ""total_threads"": ""1363i""}")
+ (swap,1574753954000000000,"{""host"": ""mats-XPS-13-9380""}","{""free"": ""658169856i"", ""used"": ""1489309696i"", ""total"": ""2147479552i"", ""used_percent"": ""69.3515193014513""}")
+ (swap,1574753954000000000,"{""host"": ""mats-XPS-13-9380""}","{""in"": ""804974592i"", ""out"": ""6606921728i""}")
+ (system,1574753954000000000,"{""host"": ""mats-XPS-13-9380""}","{""load1"": ""2.13"", ""load5"": ""1.18"", ""load15"": ""0.84"", ""n_cpus"": ""8i"", ""n_users"": ""1i""}")
+ (system,1574753954000000000,"{""host"": ""mats-XPS-13-9380""}","{""uptime"": ""607641i""}")
+ (system,1574753954000000000,"{""host"": ""mats-XPS-13-9380""}","{""uptime_format"": ""7 days,  0:47""}")
+(29 rows)
 
