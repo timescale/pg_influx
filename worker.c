@@ -3,6 +3,8 @@
 #include <postgres.h>
 #include <fmgr.h>
 
+#include <access/table.h>
+#include <access/xact.h>
 #include <executor/spi.h>
 #include <funcapi.h>
 #include <miscadmin.h>
@@ -13,13 +15,17 @@
 #include <utils/builtins.h>
 #include <utils/elog.h>
 #include <utils/guc.h>
+#include <utils/int8.h>
 #include <utils/lsyscache.h>
+#include <utils/rel.h>
+#include <utils/snapmgr.h>
 
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
 
+#include "influx.h"
 #include "network.h"
 
 void WorkerMain(Datum dbid) pg_attribute_noreturn();
@@ -29,7 +35,7 @@ typedef struct WorkerArgs {
   char service[NI_MAXSERV];
 } WorkerArgs;
 
-/* Check that sizeof(WorkerArgs) < BGW_EXTRALEN */
+/* Check that sizeof(WorkerArgs) > BGW_EXTRALEN */
 static char c1[BGW_EXTRALEN - sizeof(WorkerArgs)] pg_attribute_unused();
 
 static volatile sig_atomic_t ReloadConfig = false;
@@ -41,9 +47,48 @@ PG_FUNCTION_INFO_V1(worker_launch);
  * Process one packet of lines.
  */
 static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
+  ParseState *state;
+
   buffer[bytes] = '\0';
-  ereport(LOG, (errmsg("received %ld bytes", bytes),
-                errdetail("packet: %s", buffer)));
+  state = ParseInfluxSetup(buffer);
+
+  while (true) {
+    StringInfoData stmt;
+    Jsonb *tags, *fields;
+    int err;
+    int64 timestamp;
+
+    if (!ReadNextLine(state))
+      return;
+
+    /* If the table does not exist, we just skip the line silently. */
+    if (get_relname_relid(state->metric, nspid) == InvalidOid)
+      continue;
+
+    if (!scanint8(state->timestamp, true, &timestamp))
+      continue;
+    timestamp /= 1000;
+
+    tags = BuildJsonObject(state->tags);
+    fields = BuildJsonObject(state->fields);
+
+    initStringInfo(&stmt);
+    appendStringInfo(
+        &stmt,
+        "INSERT INTO %s.%s(_time, _tags, _fields) VALUES "
+        "(to_timestamp(%f),%s,%s)",
+        quote_identifier(get_namespace_name(nspid)),
+        quote_identifier(state->metric), (double)timestamp / 1e6,
+        quote_literal_cstr(JsonbToCString(NULL, &tags->root, VARSIZE(tags))),
+        quote_literal_cstr(
+            JsonbToCString(NULL, &fields->root, VARSIZE(fields))));
+
+    /* Execute the plan and log any errors */
+    err = SPI_execute(stmt.data, false, 0);
+    if (err != SPI_OK_INSERT)
+      elog(LOG, "SPI_execute failed executing query \"%s\": %s", stmt.data,
+           SPI_result_code_string(err));
+  }
 }
 
 /* Signal handler for SIGTERM */
@@ -67,6 +112,9 @@ static void WorkerSighup(SIGNAL_ARGS) {
  */
 static void WorkerInit(BackgroundWorker *worker, WorkerArgs *args) {
   memset(worker, 0, sizeof(*worker));
+  /* Shared memory access is necessary to connect to the database. */
+  worker->bgw_flags =
+      BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
   worker->bgw_start_time = BgWorkerStart_RecoveryFinished;
   worker->bgw_restart_time = BGW_NEVER_RESTART;
   sprintf(worker->bgw_library_name, BGW_LIBRARY_NAME);
@@ -77,6 +125,8 @@ static void WorkerInit(BackgroundWorker *worker, WorkerArgs *args) {
   worker->bgw_main_arg = MyDatabaseId;
   memcpy(worker->bgw_extra, args, sizeof(*args));
 }
+
+#define GET_FIELD(PTR, FLD) ((PTR) ? (PTR)->FLD : "<NULL>")
 
 /**
  * Main worker function.
@@ -105,6 +155,10 @@ void WorkerMain(Datum arg) {
   pqsignal(SIGHUP, WorkerSighup);
   BackgroundWorkerUnblockSignals();
 
+  BackgroundWorkerInitializeConnectionByOid(database_id, InvalidOid, 0);
+
+  pgstat_report_activity(STATE_RUNNING, "initializing worker");
+
   sfd = CreateSocket(NULL, args->service, &UdpRecvSocket, NULL, 0);
   if (sfd == -1) {
     ereport(LOG, (errcode_for_socket_access(),
@@ -112,8 +166,6 @@ void WorkerMain(Datum arg) {
                          args->service)));
     proc_exit(1);
   }
-
-  pgstat_report_activity(STATE_RUNNING, "worker initialized");
 
   ereport(LOG, (errmsg("worker initialized"),
                 errdetail("service=%s, database_id=%u, namespace_id=%u",
@@ -125,10 +177,26 @@ void WorkerMain(Datum arg) {
      as possible in non-blocking mode. */
   while (true) {
     int wait_result;
+    int err;
 
     ResetLatch(MyLatch);
     if (ShutdownWorker)
       break;
+
+    /* We start a transaction to insert all packets that we're
+       reading. This is not optimal if we are constantly inserting
+       data since we will build a very large snapshot, but it is good
+       enough for a first implementation.
+
+       We need to open a non-atomic (that is, transactional) context
+       since we are opening a table for the metric and we need to make
+       sure that it does not change while we are updating it. */
+    if ((err = SPI_connect_ext(SPI_OPT_NONATOMIC)) != SPI_OK_CONNECT)
+      elog(ERROR, "SPI_connect failed: %s", SPI_result_code_string(err));
+    SPI_start_transaction();
+    PushActiveSnapshot(GetTransactionSnapshot());
+
+    pgstat_report_activity(STATE_RUNNING, "processing incoming packets");
 
     while (!ShutdownWorker) {
       int bytes;
@@ -154,6 +222,13 @@ void WorkerMain(Datum arg) {
 
       ProcessPacket(buffer, bytes, args->namespace_id);
     }
+
+    PopActiveSnapshot();
+    SPI_commit();
+    if ((err = SPI_finish()) != SPI_OK_FINISH)
+      elog(ERROR, "SPI_finish failed: %s", SPI_result_code_string(err));
+    pgstat_report_stat(false);
+    pgstat_report_activity(STATE_IDLE, NULL);
 
     /* Here we block and wait until there is anything to read from the socket,
      * or the postmaster shuts down. */
@@ -202,6 +277,11 @@ Datum worker_launch(PG_FUNCTION_ARGS) {
   if (!RegisterDynamicBackgroundWorker(&worker, &handle))
     PG_RETURN_NULL();
 
+  /* TODO: This only waits for the worker process to actually
+     start. It would simplify testing significantly if we wait for it
+     to be ready to accept input on the port since we can then start
+     sending rows without fear of them being lost, but that requires
+     more work that it's worth right now. */
   status = WaitForBackgroundWorkerStartup(handle, &pid);
 
   if (status == BGWH_STOPPED)
