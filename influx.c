@@ -47,7 +47,7 @@ static void AddJsonField(JsonbParseState **state, char *key, char *value) {
  * @param items List of `ParseItem`
  * @returns JSONB object with the key-value pairs.
  */
-Jsonb *BuildJsonObject(List *items) {
+static Jsonb *BuildJsonObject(List *items) {
   ListCell *cell;
   JsonbParseState *state = NULL;
   JsonbValue *value;
@@ -78,10 +78,39 @@ static bool is_timestamp_type(Oid argtype) {
 }
 
 /**
+ *
+ */
+static void InsertItems(List **pitems, AttInMetadata *attinmeta, Datum *values,
+                        bool *nulls) {
+  ListCell *cell;
+  TupleDesc tupdesc = attinmeta->tupdesc;
+  List *items = *pitems;
+
+  foreach (cell, items) {
+    ParseItem *item = (ParseItem *)lfirst(cell);
+    const int attnum = SPI_fnumber(tupdesc, item->key);
+    if (attnum > 0) {
+      if (!TupleDescAttr(tupdesc, attnum - 1)->attisdropped) {
+        values[attnum - 1] =
+            InputFunctionCall(&attinmeta->attinfuncs[attnum - 1], item->value,
+                              attinmeta->attioparams[attnum - 1],
+                              attinmeta->atttypmods[attnum - 1]);
+        nulls[attnum - 1] = false; /* The values are never null */
+      } else {
+        nulls[attnum - 1] = true;
+      }
+      items = foreach_delete_current(items, cell);
+    }
+  }
+  *pitems = items;
+}
+
+/**
  * Parse one line of data from the state and compute values arrays.
  */
-bool ParseInfluxCollect(ParseState *state, TupleDesc tupdesc, Oid *argtypes,
-                        Datum *values, bool *nulls) {
+bool ParseInfluxCollect(ParseState *state, AttInMetadata *attinmeta,
+                        Oid *argtypes, Datum *values, bool *nulls) {
+  TupleDesc tupdesc = attinmeta->tupdesc;
   int time_attnum, tags_attnum, fields_attnum, i;
 
   /* Set default values for nulls array and fill in the type id. */
@@ -106,6 +135,9 @@ bool ParseInfluxCollect(ParseState *state, TupleDesc tupdesc, Oid *argtypes,
     values[time_attnum - 1] = TimestampGetDatum(value);
     nulls[time_attnum - 1] = false;
   }
+
+  InsertItems(&state->tags, attinmeta, values, nulls);
+  InsertItems(&state->fields, attinmeta, values, nulls);
 
   tags_attnum = SPI_fnumber(tupdesc, "_tags");
   if (tags_attnum > 0) {
@@ -147,22 +179,24 @@ ParseState *ParseInfluxSetup(char *buffer) {
  * @param tupdesc Tuple descriptor for the data.
  * @returns tuple Heap tuple
  */
-static HeapTuple ParseInfluxNextTuple(ParseState *state, TupleDesc tupdesc) {
+static HeapTuple ParseInfluxNextTuple(ParseState *state,
+                                      AttInMetadata *attinmeta) {
   int metric_attnum;
   Datum *values;
   bool *nulls;
   Oid *argtypes;
+  TupleDesc tupdesc = attinmeta->tupdesc;
 
   nulls = (bool *)palloc0(tupdesc->natts * sizeof(bool));
-  values = (Datum *)palloc(tupdesc->natts * sizeof(Datum));
-  argtypes = (Oid *)palloc(tupdesc->natts * sizeof(Oid));
+  values = (Datum *)palloc0(tupdesc->natts * sizeof(Datum));
+  argtypes = (Oid *)palloc0(tupdesc->natts * sizeof(Oid));
 
   /* Read lines until we find one that can be used. If none are found, we're
    * done. */
   do {
     if (!ReadNextLine(state))
       return NULL;
-  } while (!ParseInfluxCollect(state, tupdesc, argtypes, values, nulls));
+  } while (!ParseInfluxCollect(state, attinmeta, argtypes, values, nulls));
 
   /* This assumes that the metric is a text column. We should probably add a
    * check here, or call the input function for the column type. */
@@ -194,7 +228,7 @@ Datum parse_influx(PG_FUNCTION_ARGS) {
       ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                       errmsg("function returning record called in context "
                              "that cannot accept type record")));
-    funcctx->tuple_desc = tupdesc;
+    funcctx->attinmeta = TupleDescGetAttInMetadata(tupdesc);
     funcctx->user_fctx =
         ParseInfluxSetup(text_to_cstring(PG_GETARG_TEXT_PP(0)));
 
@@ -204,7 +238,7 @@ Datum parse_influx(PG_FUNCTION_ARGS) {
   funcctx = SRF_PERCALL_SETUP();
   state = funcctx->user_fctx;
 
-  tuple = ParseInfluxNextTuple(state, funcctx->tuple_desc);
+  tuple = ParseInfluxNextTuple(state, funcctx->attinmeta);
   if (tuple == NULL)
     SRF_RETURN_DONE(funcctx);
 
