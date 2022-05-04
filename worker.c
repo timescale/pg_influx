@@ -16,6 +16,7 @@
 #include <utils/elog.h>
 #include <utils/guc.h>
 #include <utils/int8.h>
+#include <utils/jsonb.h>
 #include <utils/lsyscache.h>
 #include <utils/rel.h>
 #include <utils/snapmgr.h>

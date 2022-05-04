@@ -13,7 +13,21 @@ including its intended use.
 
 ## Building and Installing
 
-To build and install the extension:
+To install the dependencies it is easiest to install the [PGDG
+version](https://wiki.postgresql.org/wiki/Apt) of the packages. Using
+the instructions from [PostgreSQL Apt
+Repository](https://www.postgresql.org/download/linux/ubuntu/) would
+look like this:
+
+```bash
+sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+sudo apt-get update
+sudo apt-get -y install postgresql postgresql-server-dev-13
+```
+
+After the dependencies are installed, To build and install the
+extension:
 
 ```
 git clone git@github.com:mkindahl/pg_influx.git

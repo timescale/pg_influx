@@ -2,8 +2,6 @@
 
 #include <postgres.h>
 
-#include <utils/elog.h>
-
 #include <assert.h>
 #include <ctype.h>
 #include <setjmp.h>
@@ -12,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+enum state { ST_BEG, ST_NUM, ST_DEC, ST_INT, ST_STR };
 
 static bool isident(char ch) {
   return isalnum(ch) || ch == '_' || ch == '-';
@@ -97,21 +97,24 @@ static char *ReadIdent(ParseState *state) {
  * parser state will remain at the original position.
  *
  * @param state Parser state
+ *
  * @param term C string with the terminator characters.
  *
  * @returns A pointer to the begining of the string, or null if
  * nothing was read.
  */
-static char *ReadValue(ParseState *state) {
+static char *ReadValue(ParseState *state, ValueType *ptype) {
   char *const begin = state->current;
   char *rptr = state->current; /* Read pointer */
   char *wptr = state->current; /* Write pointer */
   bool was_quoted = false;
+  enum state st = ST_BEG;
 
-  /* If we allow a quoted string, we will skip the first quote, if it is
-   * present. */
+  /* If we allow a quoted string, we will skip the first quote, if it
+   * is present. */
   if (*rptr == '"') {
     was_quoted = true;
+    st = ST_STR;
     ++rptr;
   }
 
@@ -124,6 +127,16 @@ static char *ReadValue(ParseState *state) {
       break;
     else if (!was_quoted && (isspace(*rptr) || *rptr == ','))
       break;
+
+    if (st == ST_NUM && *rptr == 'i')
+      st = ST_INT;
+    else if (st == ST_NUM && *rptr == '.')
+      st = ST_DEC;
+    else if (st == ST_BEG || st == ST_NUM)
+      st = isdigit(*rptr) ? ST_NUM : ST_STR;
+    else if (st == ST_INT)
+      st = ST_STR;
+
     *wptr++ = *rptr++;
   }
 
@@ -143,6 +156,22 @@ static char *ReadValue(ParseState *state) {
                errdetail("expected '\"' as position %u, saw '%c'",
                          (unsigned int)(rptr - state->start), *rptr)));
   }
+  if (ptype) {
+    switch (st) {
+      case ST_INT:
+        *ptype = TYPE_INTEGER;
+        --wptr; /* Drop trailing "i" */
+        break;
+      case ST_DEC:
+      case ST_NUM:
+        *ptype = TYPE_FLOAT;
+        break;
+      case ST_STR:
+      case ST_BEG:
+        *ptype = TYPE_STRING;
+        break;
+    }
+  }
   if (rptr != wptr)
     *wptr = '\0';
   state->current = rptr;
@@ -155,11 +184,11 @@ static char *ReadValue(ParseState *state) {
  *
  * @returns NULL if there are no more items, pointer to an item otherwise.
  */
-static ParseItem *ReadItem(ParseState *state) {
-  ParseItem *item = palloc(sizeof(ParseItem));
+static ParseItem *ReadItem(ParseState *state, bool typed) {
+  ParseItem *item = palloc0(sizeof(ParseItem));
   item->key = ReadIdent(state);
   ExpectNextChar(state, '=');
-  item->value = ReadValue(state);
+  item->value = ReadValue(state, typed ? &item->type : NULL);
   return item;
 }
 
@@ -175,11 +204,11 @@ static ParseItem *ReadItem(ParseState *state) {
  *
  * @returns The list of items
  */
-static List *ReadItemList(ParseState *state) {
+static List *ReadItemList(ParseState *state, bool typed) {
   List *items = NIL;
-  items = lappend(items, ReadItem(state));
+  items = lappend(items, ReadItem(state, typed));
   while (CheckNextChar(state, ','))
-    items = lappend(items, ReadItem(state));
+    items = lappend(items, ReadItem(state, typed));
   return items;
 }
 
@@ -204,11 +233,11 @@ bool ReadNextLine(ParseState *state) {
     return false;
   state->metric = metric;
   if (CheckNextChar(state, ','))
-    state->tags = ReadItemList(state);
+    state->tags = ReadItemList(state, false);
   ExpectNextChar(state, ' ');
-  state->fields = ReadItemList(state);
+  state->fields = ReadItemList(state, true);
   ExpectNextChar(state, ' ');
-  state->timestamp = ReadValue(state);
+  state->timestamp = ReadValue(state, NULL);
   CheckNextChar(state, '\n');
   return true;
 }

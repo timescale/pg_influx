@@ -9,9 +9,17 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+typedef enum ValueType {
+  TYPE_NONE,
+  TYPE_STRING,
+  TYPE_INTEGER,
+  TYPE_FLOAT
+} ValueType;
+
 typedef struct ParseItem {
   char *key;
   char *value;
+  ValueType type;
 } ParseItem;
 
 /**
