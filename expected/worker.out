@@ -1,7 +1,7 @@
 CREATE SCHEMA db_worker;
 CREATE TABLE db_worker.cpu(_time timestamptz, _tags jsonb, _fields jsonb);
-CREATE TABLE db_worker.disk(_time timestamptz, _tags jsonb, _fields jsonb);
-CREATE TABLE db_worker.system(_time timestamp, _tags jsonb, _fields jsonb);
+CREATE TABLE db_worker.disk(_time timestamptz, host text, device text, _tags jsonb, _fields jsonb);
+CREATE TABLE db_worker.system(_time timestamp, host text, uptime int, _tags jsonb, _fields jsonb);
 \set VERBOSITY terse
 \x on
 SELECT pg_sleep(1) FROM worker_launch('db_worker', 4711::text);
@@ -31,27 +31,37 @@ _tags   | {"cpu": "cpu1", "host": "fury"}
 _fields | {"usage_user": "3.9215686274649673", "usage_system": "3.921568627286635"}
 
 SELECT * FROM db_worker.disk;
--[ RECORD 1 ]--------------------------------------------------------------------------------------------------------------
+-[ RECORD 1 ]-----------------------------------------------------------------------------------------------------------
 _time   | Mon Nov 25 23:39:14 2019 PST
-_tags   | {"host": "fury", "mode": "rw", "path": "/", "device": "nvme0n1p2", "fstype": "ext4"}
-_fields | {"free": "912578965504i", "used": "42751348736i", "total": "1006530654208i", "used_percent": "4.475033200428718"}
--[ RECORD 2 ]--------------------------------------------------------------------------------------------------------------
+host    | fury
+device  | nvme0n1p2
+_tags   | {"mode": "rw", "path": "/", "fstype": "ext4"}
+_fields | {"free": "912578965504", "used": "42751348736", "total": "1006530654208", "used_percent": "4.475033200428718"}
+-[ RECORD 2 ]-----------------------------------------------------------------------------------------------------------
 _time   | Mon Nov 25 23:39:14 2019 PST
-_tags   | {"host": "fury", "mode": "rw", "path": "/boot/efi", "device": "nvme0n1p1", "fstype": "vfat"}
-_fields | {"free": "527806464i", "used": "7999488i", "total": "535805952i", "used_percent": "1.4929822952022749"}
+host    | fury
+device  | nvme0n1p1
+_tags   | {"mode": "rw", "path": "/boot/efi", "fstype": "vfat"}
+_fields | {"free": "527806464", "used": "7999488", "total": "535805952", "used_percent": "1.4929822952022749"}
 
 SELECT * FROM db_worker.system;
--[ RECORD 1 ]----------------------------------------------------------------------------------
-_time   | Tue Nov 26 08:39:14 2019
-_tags   | {"host": "fury"}
-_fields | {"load1": "2.13", "load5": "1.18", "load15": "0.84", "n_cpus": "8i", "n_users": "1i"}
--[ RECORD 2 ]----------------------------------------------------------------------------------
-_time   | Tue Nov 26 08:39:14 2019
-_tags   | {"host": "fury"}
-_fields | {"uptime": "607641i"}
--[ RECORD 3 ]----------------------------------------------------------------------------------
-_time   | Tue Nov 26 08:39:14 2019
-_tags   | {"host": "fury"}
+-[ RECORD 1 ]--------------------------------------------------------------------------------
+_time   | Tue Nov 26 07:39:14 2019
+host    | fury
+uptime  | 
+_tags   | {}
+_fields | {"load1": "2.13", "load5": "1.18", "load15": "0.84", "n_cpus": "8", "n_users": "1"}
+-[ RECORD 2 ]--------------------------------------------------------------------------------
+_time   | Tue Nov 26 07:39:14 2019
+host    | fury
+uptime  | 607641
+_tags   | {}
+_fields | {}
+-[ RECORD 3 ]--------------------------------------------------------------------------------
+_time   | Tue Nov 26 07:39:14 2019
+host    | fury
+uptime  | 
+_tags   | {}
 _fields | {"uptime_format": "7 days,  0:47"}
 
 SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE backend_type like '%Influx%';

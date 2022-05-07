@@ -1,7 +1,7 @@
 CREATE SCHEMA db_worker;
 CREATE TABLE db_worker.cpu(_time timestamptz, _tags jsonb, _fields jsonb);
-CREATE TABLE db_worker.disk(_time timestamptz, _tags jsonb, _fields jsonb);
-CREATE TABLE db_worker.system(_time timestamp, _tags jsonb, _fields jsonb);
+CREATE TABLE db_worker.disk(_time timestamptz, host text, device text, _tags jsonb, _fields jsonb);
+CREATE TABLE db_worker.system(_time timestamp, host text, uptime int, _tags jsonb, _fields jsonb);
 
 \set VERBOSITY terse
 \x on

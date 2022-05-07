@@ -1,5 +1,5 @@
 EXTENSION = influx
-DATA = influx--0.1.sql
+DATA = influx--0.2.sql
 MODULE_big = influx
 OBJS = influx.o worker.o network.o parser.o
 

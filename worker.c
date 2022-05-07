@@ -15,7 +15,6 @@
 #include <utils/builtins.h>
 #include <utils/elog.h>
 #include <utils/guc.h>
-#include <utils/int8.h>
 #include <utils/lsyscache.h>
 #include <utils/rel.h>
 #include <utils/snapmgr.h>
@@ -53,41 +52,64 @@ static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
   state = ParseInfluxSetup(buffer);
 
   while (true) {
+    Relation rel;
+    SPIPlanPtr plan;
+    Oid relid;
+    Datum *values;
+    bool *nulls;
+    char *cnulls;
+    Oid *argtypes;
+    AttInMetadata *attinmeta;
     StringInfoData stmt;
-    Jsonb *tags, *fields;
-    int err;
-    int64 timestamp;
+    int err, i, natts;
 
     if (!ReadNextLine(state))
       return;
 
+    /* Get tuple descriptor for metric table and parse all the data
+     * into values array. To do this, we open the table for access and
+     * keep it open until the end of the transaction. Otherwise, the
+     * table definition can change before we've had a chance to insert
+     * the data. */
+    relid = get_relname_relid(state->metric, nspid);
+
     /* If the table does not exist, we just skip the line silently. */
-    if (get_relname_relid(state->metric, nspid) == InvalidOid)
+    if (relid == InvalidOid)
       continue;
 
-    if (!scanint8(state->timestamp, true, &timestamp))
-      continue;
-    timestamp /= 1000;
+    rel = table_open(relid, AccessShareLock);
+    attinmeta = TupleDescGetAttInMetadata(RelationGetDescr(rel));
+    natts = attinmeta->tupdesc->natts;
 
-    tags = BuildJsonObject(state->tags);
-    fields = BuildJsonObject(state->fields);
+    values = (Datum *)palloc0(natts * sizeof(Datum));
+    nulls = (bool *)palloc0(natts * sizeof(bool));
+    argtypes = (Oid *)palloc(natts * sizeof(Oid));
 
-    initStringInfo(&stmt);
-    appendStringInfo(
-        &stmt,
-        "INSERT INTO %s.%s(_time, _tags, _fields) VALUES "
-        "(to_timestamp(%f),%s,%s)",
-        quote_identifier(get_namespace_name(nspid)),
-        quote_identifier(state->metric), (double)timestamp / 1e6,
-        quote_literal_cstr(JsonbToCString(NULL, &tags->root, VARSIZE(tags))),
-        quote_literal_cstr(
-            JsonbToCString(NULL, &fields->root, VARSIZE(fields))));
+    if (ParseInfluxCollect(state, attinmeta, argtypes, values, nulls)) {
+      /* Using the tuple descriptor and the parsed package, build the
+       * insert statement and collect the null array for the prepare
+       * call. */
+      initStringInfo(&stmt);
+      appendStringInfo(
+          &stmt, "INSERT INTO %s.%s VALUES (",
+          quote_identifier(get_namespace_name(RelationGetNamespace(rel))),
+          quote_identifier(RelationGetRelationName(rel)));
+      cnulls = (char *)palloc(natts * sizeof(char));
+      for (i = 0; i < natts; ++i) {
+        appendStringInfo(&stmt, "$%d%s", i + 1, (i < natts - 1 ? ", " : ""));
+        cnulls[i] = (nulls[i]) ? 'n' : ' ';
+      }
+      appendStringInfoString(&stmt, ")");
 
-    /* Execute the plan and log any errors */
-    err = SPI_execute(stmt.data, false, 0);
-    if (err != SPI_OK_INSERT)
-      elog(LOG, "SPI_execute failed executing query \"%s\": %s", stmt.data,
-           SPI_result_code_string(err));
+      /* Execute the plan and log any errors */
+      plan = SPI_prepare(stmt.data, natts, argtypes);
+      err = SPI_execute_plan(plan, values, cnulls, false, 0);
+      if (err != SPI_OK_INSERT)
+        elog(LOG, "SPI_execute_plan failed executing query \"%s\": %s",
+             stmt.data, SPI_result_code_string(err));
+    }
+
+    table_close(rel, NoLock);
   }
 }
 
