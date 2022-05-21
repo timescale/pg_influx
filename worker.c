@@ -1,3 +1,19 @@
+/*
+ * Copyright 2022 Timescale Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "worker.h"
 
 #include <postgres.h>
@@ -16,6 +32,7 @@
 #include <utils/elog.h>
 #include <utils/guc.h>
 #include <utils/int8.h>
+#include <utils/inval.h>
 #include <utils/jsonb.h>
 #include <utils/lsyscache.h>
 #include <utils/rel.h>
@@ -26,10 +43,12 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "cache.h"
 #include "influx.h"
 #include "network.h"
 
 void WorkerMain(Datum dbid) pg_attribute_noreturn();
+PG_FUNCTION_INFO_V1(worker_launch);
 
 typedef struct WorkerArgs {
   Oid namespace_id;
@@ -42,7 +61,47 @@ static char c1[BGW_EXTRALEN - sizeof(WorkerArgs)] pg_attribute_unused();
 static volatile sig_atomic_t ReloadConfig = false;
 static volatile sig_atomic_t ShutdownWorker = false;
 
-PG_FUNCTION_INFO_V1(worker_launch);
+/**
+ * Prepare a record for the relation.
+ *
+ * Memory for the record need to be already allocated, but it will be
+ * filled in.
+ *
+ * @param[in] Relation to prepare record for.
+ * @param[in] Array of parameter types.
+ * @param[out] Pointer to variable for prepared insert statement.
+ */
+static void PrepareRecord(Relation rel, Oid *argtypes, PreparedInsert record) {
+  TupleDesc tupdesc = RelationGetDescr(rel);
+  StringInfoData stmt;
+  SPIPlanPtr plan;
+  const Oid relid = RelationGetRelid(rel);
+  int i;
+
+  elog(NOTICE, "preparing statement for %s", SPI_getrelname(rel));
+
+  /* Using the tuple descriptor and the parsed package, build the
+   * insert statement and collect the null array for the prepare
+   * call. */
+  initStringInfo(&stmt);
+  appendStringInfo(&stmt, "INSERT INTO %s.%s VALUES (",
+                   quote_identifier(SPI_getnspname(rel)),
+                   quote_identifier(SPI_getrelname(rel)));
+  for (i = 0; i < tupdesc->natts; ++i)
+    appendStringInfo(&stmt, "$%d%s", i + 1,
+                     (i < tupdesc->natts - 1 ? ", " : ""));
+  appendStringInfoString(&stmt, ")");
+
+  plan = SPI_prepare(stmt.data, tupdesc->natts, argtypes);
+  if (!plan)
+    elog(ERROR, "SPI_prepare for relation %s failed: %s", SPI_getrelname(rel),
+         SPI_result_code_string(SPI_result));
+  if (SPI_keepplan(plan))
+    elog(ERROR, "SPI_keepplan failed for relation %s", SPI_getrelname(rel));
+
+  record->relid = relid;
+  record->pplan = plan;
+}
 
 /**
  * Process one packet of lines.
@@ -55,14 +114,11 @@ static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
 
   while (true) {
     Relation rel;
-    SPIPlanPtr plan;
     Oid relid;
     Datum *values;
     bool *nulls;
-    char *cnulls;
     Oid *argtypes;
     AttInMetadata *attinmeta;
-    StringInfoData stmt;
     int err, i, natts;
 
     if (!ReadNextLine(state))
@@ -76,6 +132,7 @@ static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
     relid = get_relname_relid(state->metric, nspid);
 
     /* If the table does not exist, we just skip the line silently. */
+    relid = get_relname_relid(state->metric, nspid);
     if (relid == InvalidOid)
       continue;
 
@@ -88,27 +145,22 @@ static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
     argtypes = (Oid *)palloc(natts * sizeof(Oid));
 
     if (ParseInfluxCollect(state, attinmeta, argtypes, values, nulls)) {
-      /* Using the tuple descriptor and the parsed package, build the
-       * insert statement and collect the null array for the prepare
-       * call. */
-      initStringInfo(&stmt);
-      appendStringInfo(
-          &stmt, "INSERT INTO %s.%s VALUES (",
-          quote_identifier(get_namespace_name(RelationGetNamespace(rel))),
-          quote_identifier(RelationGetRelationName(rel)));
-      cnulls = (char *)palloc(natts * sizeof(char));
-      for (i = 0; i < natts; ++i) {
-        appendStringInfo(&stmt, "$%d%s", i + 1, (i < natts - 1 ? ", " : ""));
-        cnulls[i] = (nulls[i]) ? 'n' : ' ';
-      }
-      appendStringInfoString(&stmt, ")");
+      PreparedInsert record;
+      char *cnulls;
 
-      /* Execute the plan and log any errors */
-      plan = SPI_prepare(stmt.data, natts, argtypes);
-      err = SPI_execute_plan(plan, values, cnulls, false, 0);
+      /* Find the hashed entry, or prepare a statement and fill in the
+         entry. Filling in the entry will also cache it. */
+      if (!FindOrAllocEntry(rel, &record))
+        PrepareRecord(rel, argtypes, record);
+
+      cnulls = (char *)palloc(natts * sizeof(char));
+      for (i = 0; i < natts; ++i)
+        cnulls[i] = (nulls[i]) ? 'n' : ' ';
+
+      err = SPI_execute_plan(record->pplan, values, cnulls, false, 0);
       if (err != SPI_OK_INSERT)
-        elog(LOG, "SPI_execute_plan failed executing query \"%s\": %s",
-             stmt.data, SPI_result_code_string(err));
+        elog(LOG, "SPI_execute_plan failed executing: %s",
+             SPI_result_code_string(err));
     }
 
     table_close(rel, NoLock);
@@ -182,6 +234,8 @@ void WorkerMain(Datum arg) {
   BackgroundWorkerInitializeConnectionByOid(database_id, InvalidOid, 0);
 
   pgstat_report_activity(STATE_RUNNING, "initializing worker");
+
+  CacheRegisterRelcacheCallback(InsertCacheInvalCallback, 0);
 
   sfd = CreateSocket(NULL, args->service, &UdpRecvSocket, NULL, 0);
   if (sfd == -1) {

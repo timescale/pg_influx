@@ -1,0 +1,70 @@
+CREATE SCHEMA db_worker;
+CREATE TABLE db_worker.cpu(_time timestamptz, _tags jsonb, _fields jsonb);
+\set VERBOSITY terse
+\x on
+SELECT pg_sleep(1) FROM worker_launch('db_worker', 4711::text);
+NOTICE:  background worker started
+-[ RECORD 1 ]
+pg_sleep | 
+
+CALL send_packet('cpu,cpu=cpu0,host=fury usage_system=2.04,usage_user=5.40 1574753954000000000', 4711::text);
+SELECT pg_sleep(1);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT * FROM db_worker.cpu;
+-[ RECORD 1 ]-------------------------------------------
+_time   | Mon Nov 25 23:39:14 2019 PST
+_tags   | {"cpu": "cpu0", "host": "fury"}
+_fields | {"usage_user": "5.40", "usage_system": "2.04"}
+
+ALTER TABLE db_worker.cpu ADD COLUMN cpu text;
+CALL send_packet('cpu,cpu=cpu0,host=fury usage_system=2.04,usage_user=5.40 1574753955000000000', 4711::text);
+SELECT pg_sleep(1);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT * FROM db_worker.cpu;
+-[ RECORD 1 ]-------------------------------------------
+_time   | Mon Nov 25 23:39:14 2019 PST
+_tags   | {"cpu": "cpu0", "host": "fury"}
+_fields | {"usage_user": "5.40", "usage_system": "2.04"}
+cpu     | 
+-[ RECORD 2 ]-------------------------------------------
+_time   | Mon Nov 25 23:39:15 2019 PST
+_tags   | {"host": "fury"}
+_fields | {"usage_user": "5.40", "usage_system": "2.04"}
+cpu     | cpu0
+
+ALTER TABLE db_worker.cpu ADD COLUMN host text;
+CALL send_packet('cpu,cpu=cpu0,host=fury usage_system=2.04,usage_user=5.40 1574753956000000000', 4711::text);
+SELECT pg_sleep(1);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT * FROM db_worker.cpu;
+-[ RECORD 1 ]-------------------------------------------
+_time   | Mon Nov 25 23:39:14 2019 PST
+_tags   | {"cpu": "cpu0", "host": "fury"}
+_fields | {"usage_user": "5.40", "usage_system": "2.04"}
+cpu     | 
+host    | 
+-[ RECORD 2 ]-------------------------------------------
+_time   | Mon Nov 25 23:39:15 2019 PST
+_tags   | {"host": "fury"}
+_fields | {"usage_user": "5.40", "usage_system": "2.04"}
+cpu     | cpu0
+host    | 
+-[ RECORD 3 ]-------------------------------------------
+_time   | Mon Nov 25 23:39:16 2019 PST
+_tags   | {}
+_fields | {"usage_user": "5.40", "usage_system": "2.04"}
+cpu     | cpu0
+host    | fury
+
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE backend_type like '%Influx%';
+-[ RECORD 1 ]--------+--
+pg_terminate_backend | t
+
+DROP TABLE db_worker.cpu;
+DROP SCHEMA db_worker;

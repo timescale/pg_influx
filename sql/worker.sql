@@ -19,3 +19,8 @@ SELECT * FROM db_worker.cpu;
 SELECT * FROM db_worker.disk;
 SELECT * FROM db_worker.system;
 SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE backend_type like '%Influx%';
+
+DROP TABLE db_worker.cpu;
+DROP TABLE db_worker.disk;
+DROP TABLE db_worker.system;
+DROP SCHEMA db_worker;
