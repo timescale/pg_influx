@@ -77,7 +77,17 @@ static bool is_timestamp_type(Oid argtype) {
           argtype == INT8OID);
 }
 
+static void BuildFromCString(AttInMetadata *attinmeta, char *value, int attnum,
+                             Datum *values, bool *nulls) {
+  values[attnum - 1] = InputFunctionCall(
+      &attinmeta->attinfuncs[attnum - 1], value,
+      attinmeta->attioparams[attnum - 1], attinmeta->atttypmods[attnum - 1]);
+  nulls[attnum - 1] = (value == NULL);
+}
+
 /**
+ * Insert items into values array.
+ *
  *
  */
 static void InsertItems(List **pitems, AttInMetadata *attinmeta, Datum *values,
@@ -87,18 +97,10 @@ static void InsertItems(List **pitems, AttInMetadata *attinmeta, Datum *values,
   List *items = *pitems;
 
   foreach (cell, items) {
-    ParseItem *item = (ParseItem *)lfirst(cell);
+    const ParseItem *item = (ParseItem *)lfirst(cell);
     const int attnum = SPI_fnumber(tupdesc, item->key);
     if (attnum > 0) {
-      if (!TupleDescAttr(tupdesc, attnum - 1)->attisdropped) {
-        values[attnum - 1] =
-            InputFunctionCall(&attinmeta->attinfuncs[attnum - 1], item->value,
-                              attinmeta->attioparams[attnum - 1],
-                              attinmeta->atttypmods[attnum - 1]);
-        nulls[attnum - 1] = false; /* The values are never null */
-      } else {
-        nulls[attnum - 1] = true;
-      }
+      BuildFromCString(attinmeta, item->value, attnum, values, nulls);
       items = foreach_delete_current(items, cell);
     }
   }
