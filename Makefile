@@ -15,7 +15,7 @@
 EXTENSION = influx
 DATA = influx--0.3.sql
 MODULE_big = influx
-OBJS = influx.o worker.o network.o parser.o cache.o
+OBJS = influx.o worker.o network.o parser.o cache.o metric.o
 
 REGRESS = parse worker inval
 REGRESS_OPTS += --load-extension=influx

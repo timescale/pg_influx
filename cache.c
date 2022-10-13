@@ -2,6 +2,8 @@
 
 #include <postgres.h>
 
+#include <utils/inval.h>
+#include <utils/lsyscache.h>
 #include <utils/rel.h>
 
 /**
@@ -66,4 +68,8 @@ void InsertCacheInvalCallback(Datum arg, Oid relid) {
     if (found)
       SPI_freeplan(record->pplan);
   }
+}
+
+void CacheInit(void) {
+  CacheRegisterRelcacheCallback(InsertCacheInvalCallback, 0);
 }

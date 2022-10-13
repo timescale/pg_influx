@@ -119,7 +119,7 @@ static char *ReadIdent(ParseState *state) {
  * @returns A pointer to the begining of the string, or null if
  * nothing was read.
  */
-static char *ReadValue(ParseState *state, ValueType *ptype) {
+static char *ReadValue(ParseState *state, Type *ptype) {
   char *const begin = state->current;
   char *rptr = state->current; /* Read pointer */
   char *wptr = state->current; /* Write pointer */
@@ -200,8 +200,8 @@ static char *ReadValue(ParseState *state, ValueType *ptype) {
  *
  * @returns NULL if there are no more items, pointer to an item otherwise.
  */
-static ParseItem *ReadItem(ParseState *state, bool typed) {
-  ParseItem *item = palloc0(sizeof(ParseItem));
+static KVItem *ReadItem(ParseState *state, bool typed) {
+  KVItem *item = palloc0(sizeof(KVItem));
   item->key = ReadIdent(state);
   ExpectNextChar(state, '=');
   item->value = ReadValue(state, typed ? &item->type : NULL);
@@ -239,21 +239,21 @@ static List *ReadItemList(ParseState *state, bool typed) {
  * @return true on success, false on end of file.
  */
 bool ReadNextLine(ParseState *state) {
-  char *metric;
-  state->timestamp = NULL;
-  state->tags = NIL;
-  state->fields = NIL;
+  char *name;
+  state->metric.timestamp = NULL;
+  state->metric.tags = NIL;
+  state->metric.fields = NIL;
 
-  metric = ReadIdent(state);
-  if (metric == NULL)
+  name = ReadIdent(state);
+  if (name == NULL)
     return false;
-  state->metric = metric;
+  state->metric.name = name;
   if (CheckNextChar(state, ','))
-    state->tags = ReadItemList(state, false);
+    state->metric.tags = ReadItemList(state, false);
   ExpectNextChar(state, ' ');
-  state->fields = ReadItemList(state, true);
+  state->metric.fields = ReadItemList(state, true);
   ExpectNextChar(state, ' ');
-  state->timestamp = ReadValue(state, NULL);
+  state->metric.timestamp = ReadValue(state, NULL);
   CheckNextChar(state, '\n');
   return true;
 }

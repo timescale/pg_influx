@@ -32,7 +32,6 @@
 #include <utils/elog.h>
 #include <utils/guc.h>
 #include <utils/int8.h>
-#include <utils/inval.h>
 #include <utils/jsonb.h>
 #include <utils/lsyscache.h>
 #include <utils/rel.h>
@@ -62,48 +61,6 @@ static volatile sig_atomic_t ReloadConfig = false;
 static volatile sig_atomic_t ShutdownWorker = false;
 
 /**
- * Prepare a record for the relation.
- *
- * Memory for the record need to be already allocated, but it will be
- * filled in.
- *
- * @param[in] Relation to prepare record for.
- * @param[in] Array of parameter types.
- * @param[out] Pointer to variable for prepared insert statement.
- */
-static void PrepareRecord(Relation rel, Oid *argtypes, PreparedInsert record) {
-  TupleDesc tupdesc = RelationGetDescr(rel);
-  StringInfoData stmt;
-  SPIPlanPtr plan;
-  const Oid relid = RelationGetRelid(rel);
-  int i;
-
-  elog(NOTICE, "preparing statement for %s", SPI_getrelname(rel));
-
-  /* Using the tuple descriptor and the parsed package, build the
-   * insert statement and collect the null array for the prepare
-   * call. */
-  initStringInfo(&stmt);
-  appendStringInfo(&stmt, "INSERT INTO %s.%s VALUES (",
-                   quote_identifier(SPI_getnspname(rel)),
-                   quote_identifier(SPI_getrelname(rel)));
-  for (i = 0; i < tupdesc->natts; ++i)
-    appendStringInfo(&stmt, "$%d%s", i + 1,
-                     (i < tupdesc->natts - 1 ? ", " : ""));
-  appendStringInfoString(&stmt, ")");
-
-  plan = SPI_prepare(stmt.data, tupdesc->natts, argtypes);
-  if (!plan)
-    elog(ERROR, "SPI_prepare for relation %s failed: %s", SPI_getrelname(rel),
-         SPI_result_code_string(SPI_result));
-  if (SPI_keepplan(plan))
-    elog(ERROR, "SPI_keepplan failed for relation %s", SPI_getrelname(rel));
-
-  record->relid = relid;
-  record->pplan = plan;
-}
-
-/**
  * Process one packet of lines.
  */
 static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
@@ -113,57 +70,9 @@ static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
   state = ParseInfluxSetup(buffer);
 
   while (true) {
-    Relation rel;
-    Oid relid;
-    Datum *values;
-    bool *nulls;
-    Oid *argtypes;
-    AttInMetadata *attinmeta;
-    int err, i, natts;
-
     if (!ReadNextLine(state))
       return;
-
-    /* Get tuple descriptor for metric table and parse all the data
-     * into values array. To do this, we open the table for access and
-     * keep it open until the end of the transaction. Otherwise, the
-     * table definition can change before we've had a chance to insert
-     * the data. */
-    relid = get_relname_relid(state->metric, nspid);
-
-    /* If the table does not exist, we just skip the line silently. */
-    relid = get_relname_relid(state->metric, nspid);
-    if (relid == InvalidOid)
-      continue;
-
-    rel = table_open(relid, AccessShareLock);
-    attinmeta = TupleDescGetAttInMetadata(RelationGetDescr(rel));
-    natts = attinmeta->tupdesc->natts;
-
-    values = (Datum *)palloc0(natts * sizeof(Datum));
-    nulls = (bool *)palloc0(natts * sizeof(bool));
-    argtypes = (Oid *)palloc(natts * sizeof(Oid));
-
-    if (ParseInfluxCollect(state, attinmeta, argtypes, values, nulls)) {
-      PreparedInsert record;
-      char *cnulls;
-
-      /* Find the hashed entry, or prepare a statement and fill in the
-         entry. Filling in the entry will also cache it. */
-      if (!FindOrAllocEntry(rel, &record))
-        PrepareRecord(rel, argtypes, record);
-
-      cnulls = (char *)palloc(natts * sizeof(char));
-      for (i = 0; i < natts; ++i)
-        cnulls[i] = (nulls[i]) ? 'n' : ' ';
-
-      err = SPI_execute_plan(record->pplan, values, cnulls, false, 0);
-      if (err != SPI_OK_INSERT)
-        elog(LOG, "SPI_execute_plan failed executing: %s",
-             SPI_result_code_string(err));
-    }
-
-    table_close(rel, NoLock);
+    MetricInsert(&state->metric, nspid);
   }
 }
 
@@ -235,7 +144,7 @@ void WorkerMain(Datum arg) {
 
   pgstat_report_activity(STATE_RUNNING, "initializing worker");
 
-  CacheRegisterRelcacheCallback(InsertCacheInvalCallback, 0);
+  CacheInit();
 
   sfd = CreateSocket(NULL, args->service, &UdpRecvSocket, NULL, 0);
   if (sfd == -1) {

@@ -25,18 +25,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-typedef enum ValueType {
-  TYPE_NONE,
-  TYPE_STRING,
-  TYPE_INTEGER,
-  TYPE_FLOAT
-} ValueType;
-
-typedef struct ParseItem {
-  char *key;
-  char *value;
-  ValueType type;
-} ParseItem;
+#include "metric.h"
 
 /**
  * Parser state.
@@ -50,17 +39,8 @@ typedef struct ParseState {
   /** Current read position of line buffer  */
   char *current;
 
-  /** Measurement identifier, pointer into the line buffer */
-  const char *metric;
-
-  /** Timestamp as a string */
-  const char *timestamp;
-
-  /** List of items that represent tags */
-  List *tags;
-
-  /** List of items that represent fields */
-  List *fields;
+  /** Metric resulting from the parse. */
+  Metric metric;
 } ParseState;
 
 void ParseStateInit(ParseState *state, char *line);

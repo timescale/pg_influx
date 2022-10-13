@@ -30,8 +30,6 @@
 #include "parser.h"
 
 ParseState *ParseInfluxSetup(char *buffer);
-bool ParseInfluxCollect(ParseState *state, AttInMetadata *attinmeta,
-                        Oid *argtypes, Datum *values, bool *nulls);
 Jsonb *BuildJsonObject(List *items);
 
 #endif /* INFLUX_H_ */

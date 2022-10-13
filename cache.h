@@ -29,6 +29,7 @@ typedef struct PreparedInsertData {
 
 typedef PreparedInsertData *PreparedInsert;
 
+extern void CacheInit(void);
 extern bool FindOrAllocEntry(Relation rel, PreparedInsert *precord);
 extern void InitInsertCache(void);
 extern void InsertCacheInvalCallback(Datum arg, Oid relid);
