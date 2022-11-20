@@ -30,7 +30,7 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "parser.h"
+#include "ingest.h"
 
 PG_MODULE_MAGIC;
 
@@ -39,9 +39,9 @@ PG_FUNCTION_INFO_V1(parse_influx);
 /**
  * Parser state setup.
  */
-ParseState *ParseInfluxSetup(char *buffer) {
-  ParseState *state = palloc(sizeof(ParseState));
-  ParseStateInit(state, buffer);
+IngestState *ParseInfluxSetup(char *buffer) {
+  IngestState *state = palloc(sizeof(IngestState));
+  IngestStateInit(state, buffer);
   return state;
 }
 
@@ -58,7 +58,7 @@ ParseState *ParseInfluxSetup(char *buffer) {
  * @param tupdesc Tuple descriptor for the data.
  * @returns tuple Heap tuple
  */
-static HeapTuple ParseInfluxNextTuple(ParseState *state,
+static HeapTuple ParseInfluxNextTuple(IngestState *state,
                                       AttInMetadata *attinmeta) {
   int metric_attnum;
   Datum *values;
@@ -73,7 +73,7 @@ static HeapTuple ParseInfluxNextTuple(ParseState *state,
   /* Read lines until we find one that can be used. If none are found, we're
    * done. */
   do {
-    if (!ReadNextLine(state))
+    if (!IngestReadNextLine(state))
       return NULL;
   } while (!CollectValues(&state->metric, attinmeta, argtypes, values, nulls));
 
@@ -94,7 +94,7 @@ static HeapTuple ParseInfluxNextTuple(ParseState *state,
 Datum parse_influx(PG_FUNCTION_ARGS) {
   HeapTuple tuple;
   FuncCallContext *funcctx;
-  ParseState *state;
+  IngestState *state;
 
   if (SRF_IS_FIRSTCALL()) {
     TupleDesc tupdesc;

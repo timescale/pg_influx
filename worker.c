@@ -64,13 +64,13 @@ static volatile sig_atomic_t ShutdownWorker = false;
  * Process one packet of lines.
  */
 static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
-  ParseState *state;
+  IngestState *state;
 
   buffer[bytes] = '\0';
   state = ParseInfluxSetup(buffer);
 
   while (true) {
-    if (!ReadNextLine(state))
+    if (!IngestReadNextLine(state))
       return;
     MetricInsert(&state->metric, nspid);
   }

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "parser.h"
+#include "ingest.h"
 
 #include <postgres.h>
 
@@ -46,7 +46,7 @@ static bool isident(char ch) {
  * @retval true the next character matches `ch`
  * @retval false The next character does not match `ch`
  */
-static bool CheckNextChar(ParseState *state, char ch) {
+static bool CheckNextChar(IngestState *state, char ch) {
   if (*state->current != ch)
     return false;
   *state->current++ = '\0';
@@ -62,7 +62,7 @@ static bool CheckNextChar(ParseState *state, char ch) {
  * @param state Parser state
  * @param ch Character to match
  */
-static void ExpectNextChar(ParseState *state, char ch) {
+static void ExpectNextChar(IngestState *state, char ch) {
   if (*state->current != ch)
     ereport(ERROR,
             (errcode(ERRCODE_SYNTAX_ERROR), errmsg("unexpected character"),
@@ -75,7 +75,7 @@ static void ExpectNextChar(ParseState *state, char ch) {
 /**
  * Initialize parser state.
  */
-void ParseStateInit(ParseState *state, char *line) {
+void IngestStateInit(IngestState *state, char *line) {
   memset(state, 0, sizeof(*state));
   state->current = line;
   state->start = line;
@@ -84,7 +84,7 @@ void ParseStateInit(ParseState *state, char *line) {
 /**
  * Read identifier from buffer.
  */
-static char *ReadIdent(ParseState *state) {
+static char *ReadIdent(IngestState *state) {
   char *begin = state->current;
   if (!*state->current)
     return NULL;
@@ -119,7 +119,7 @@ static char *ReadIdent(ParseState *state) {
  * @returns A pointer to the begining of the string, or null if
  * nothing was read.
  */
-static char *ReadValue(ParseState *state, Type *ptype) {
+static char *ReadValue(IngestState *state, Type *ptype) {
   char *const begin = state->current;
   char *rptr = state->current; /* Read pointer */
   char *wptr = state->current; /* Write pointer */
@@ -200,7 +200,7 @@ static char *ReadValue(ParseState *state, Type *ptype) {
  *
  * @returns NULL if there are no more items, pointer to an item otherwise.
  */
-static KVItem *ReadItem(ParseState *state, bool typed) {
+static KVItem *ReadItem(IngestState *state, bool typed) {
   KVItem *item = palloc0(sizeof(KVItem));
   item->key = ReadIdent(state);
   ExpectNextChar(state, '=');
@@ -220,7 +220,7 @@ static KVItem *ReadItem(ParseState *state, bool typed) {
  *
  * @returns The list of items
  */
-static List *ReadItemList(ParseState *state, bool typed) {
+static List *ParserReadItemList(IngestState *state, bool typed) {
   List *items = NIL;
   items = lappend(items, ReadItem(state, typed));
   while (CheckNextChar(state, ','))
@@ -238,7 +238,7 @@ static List *ReadItemList(ParseState *state, bool typed) {
  * @param state Parser state
  * @return true on success, false on end of file.
  */
-bool ReadNextLine(ParseState *state) {
+bool IngestReadNextLine(IngestState *state) {
   char *name;
   state->metric.timestamp = NULL;
   state->metric.tags = NIL;
@@ -249,9 +249,9 @@ bool ReadNextLine(ParseState *state) {
     return false;
   state->metric.name = name;
   if (CheckNextChar(state, ','))
-    state->metric.tags = ReadItemList(state, false);
+    state->metric.tags = ParserReadItemList(state, false);
   ExpectNextChar(state, ' ');
-  state->metric.fields = ReadItemList(state, true);
+  state->metric.fields = ParserReadItemList(state, true);
   ExpectNextChar(state, ' ');
   state->metric.timestamp = ReadValue(state, NULL);
   CheckNextChar(state, '\n');

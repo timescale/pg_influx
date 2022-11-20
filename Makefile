@@ -15,7 +15,7 @@
 EXTENSION = influx
 DATA = influx--0.3.sql
 MODULE_big = influx
-OBJS = influx.o worker.o network.o parser.o cache.o metric.o
+OBJS = influx.o worker.o network.o ingest.o cache.o metric.o
 
 REGRESS = parse worker inval
 REGRESS_OPTS += --load-extension=influx
@@ -25,7 +25,7 @@ PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 
 cache.o: cache.c cache.h
-influx.o: influx.c influx.h parser.h
+influx.o: influx.c influx.h ingest.h
 network.o: network.c network.h
-parser.o: parser.c parser.h
-worker.o: worker.c worker.h cache.h influx.h parser.h network.h
+ingest.o: ingest.c ingest.h
+worker.o: worker.c worker.h cache.h influx.h ingest.h network.h
