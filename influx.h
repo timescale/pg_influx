@@ -27,9 +27,9 @@
 
 #include <stdbool.h>
 
-#include "parser.h"
+#include "ingest.h"
 
-ParseState *ParseInfluxSetup(char *buffer);
+IngestState *ParseInfluxSetup(char *buffer);
 Jsonb *BuildJsonObject(List *items);
 
 #endif /* INFLUX_H_ */

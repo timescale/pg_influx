@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef PARSER_H_
-#define PARSER_H_
+#ifndef INGEST_H_
+#define INGEST_H_
 
 #include <postgres.h>
 
@@ -28,22 +28,23 @@
 #include "metric.h"
 
 /**
- * Parser state.
+ * Ingest parser state.
  *
  * @note All pointers in the parser state will point into the line
  * buffer.
  */
-typedef struct ParseState {
-  char *start; /**< Start of line buffer */
+typedef struct IngestState {
+  /** Start of line buffer */
+  char *start;
 
   /** Current read position of line buffer  */
   char *current;
 
   /** Metric resulting from the parse. */
   Metric metric;
-} ParseState;
+} IngestState;
 
-void ParseStateInit(ParseState *state, char *line);
-bool ReadNextLine(ParseState *state);
+void IngestStateInit(IngestState *state, char *line);
+bool IngestReadNextLine(IngestState *state);
 
-#endif /* PARSER_H_ */
+#endif /* INGEST_H_ */

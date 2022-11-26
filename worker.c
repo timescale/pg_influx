@@ -64,13 +64,13 @@ static volatile sig_atomic_t ShutdownWorker = false;
  * Process one packet of lines.
  */
 static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
-  ParseState *state;
+  IngestState *state;
 
   buffer[bytes] = '\0';
   state = ParseInfluxSetup(buffer);
 
   while (true) {
-    if (!ReadNextLine(state))
+    if (!IngestReadNextLine(state))
       return;
     MetricInsert(&state->metric, nspid);
   }
@@ -158,6 +158,12 @@ void WorkerMain(Datum arg) {
                 errdetail("service=%s, database_id=%u, namespace_id=%u",
                           args->service, database_id, args->namespace_id)));
 
+  /* We need to start a transaction first because none is started and
+     SPI_connect_ext might use TopTransactionContext, which is set by
+     this function. The SPI_commit below will automatically start a
+     new one. */
+  StartTransactionCommand();
+
   /* This is the same approach as used in pgstats.c: We read the
      packets in two loops. One outer that will block when there is no
      data received, and one inner loop that will read packets as long
@@ -180,7 +186,6 @@ void WorkerMain(Datum arg) {
        sure that it does not change while we are updating it. */
     if ((err = SPI_connect_ext(SPI_OPT_NONATOMIC)) != SPI_OK_CONNECT)
       elog(ERROR, "SPI_connect failed: %s", SPI_result_code_string(err));
-    SPI_start_transaction();
     PushActiveSnapshot(GetTransactionSnapshot());
 
     pgstat_report_activity(STATE_RUNNING, "processing incoming packets");
