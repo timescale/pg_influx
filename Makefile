@@ -25,7 +25,8 @@ PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 
 cache.o: cache.c cache.h
-influx.o: influx.c influx.h ingest.h
+influx.o: influx.c influx.h ingest.h metric.h worker.h
+ingest.o: ingest.c ingest.h metric.h
+metric.o: metric.c metric.h cache.h
 network.o: network.c network.h
-ingest.o: ingest.c ingest.h
-worker.o: worker.c worker.h cache.h influx.h ingest.h network.h
+worker.o: worker.c worker.h cache.h influx.h ingest.h metric.h network.h
