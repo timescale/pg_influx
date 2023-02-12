@@ -77,13 +77,24 @@ struct SocketMethod UdpSendSocket = {
     .flags = 0,
 };
 
+int SocketPort(struct sockaddr* addr, socklen_t addrlen) {
+  switch (addr->sa_family) {
+    case AF_INET:
+      return ((struct sockaddr_in*)addr)->sin_port;
+    case AF_INET6:
+      return ((struct sockaddr_in6*)addr)->sin6_port;
+    default:
+      return -1;
+  }
+}
+
 /**
  * Create a new socket for communication.
  *
  * Lookup the address and service given and try to connect or bind it
  * to make sure that it is usable.
  *
- * @param paddr Save the address in this location.
+ * @param paddr Save the address in this location, if non-NULL.
  */
 int CreateSocket(const char* hostname, const char* service,
                  const struct SocketMethod* method, struct sockaddr* paddr,

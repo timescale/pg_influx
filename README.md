@@ -13,7 +13,7 @@ including its intended use.
 
 ## Documentation
 
-- [Reference documentation](docs/reference.md)
+- [Documentation](docs/index.md)
 
 ## Building and Installing
 

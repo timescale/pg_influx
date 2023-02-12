@@ -21,6 +21,8 @@
 
 #include <access/table.h>
 #include <access/xact.h>
+#include <catalog/namespace.h>
+#include <commands/dbcommands.h>
 #include <executor/spi.h>
 #include <funcapi.h>
 #include <miscadmin.h>
@@ -46,19 +48,17 @@
 #include "influx.h"
 #include "network.h"
 
-void WorkerMain(Datum dbid) pg_attribute_noreturn();
 PG_FUNCTION_INFO_V1(worker_launch);
 
-typedef struct WorkerArgs {
-  Oid namespace_id;
-  char service[NI_MAXSERV];
-} WorkerArgs;
-
-/* Check that sizeof(WorkerArgs) > BGW_EXTRALEN */
-static char c1[BGW_EXTRALEN - sizeof(WorkerArgs)] pg_attribute_unused();
+/* MTU for the wireless interface. We don't bother about digging up
+ * the actual MTU here and just pick something that is common. */
+#define MTU 1500
 
 static volatile sig_atomic_t ReloadConfig = false;
 static volatile sig_atomic_t ShutdownWorker = false;
+
+/* Check that sizeof(WorkerArgs) > BGW_EXTRALEN */
+static char c1[BGW_EXTRALEN - sizeof(WorkerArgs)] pg_attribute_unused();
 
 /**
  * Process one packet of lines.
@@ -95,23 +95,20 @@ static void WorkerSighup(SIGNAL_ARGS) {
 /**
  * Initalize a worker before registering it.
  */
-static void WorkerInit(BackgroundWorker *worker, WorkerArgs *args) {
+void InfluxWorkerInit(BackgroundWorker *worker, WorkerArgs *args) {
   memset(worker, 0, sizeof(*worker));
   /* Shared memory access is necessary to connect to the database. */
   worker->bgw_flags =
       BGWORKER_SHMEM_ACCESS | BGWORKER_BACKEND_DATABASE_CONNECTION;
   worker->bgw_start_time = BgWorkerStart_RecoveryFinished;
   worker->bgw_restart_time = BGW_NEVER_RESTART;
-  sprintf(worker->bgw_library_name, BGW_LIBRARY_NAME);
-  sprintf(worker->bgw_function_name, BGW_FUNCTION_NAME);
+  sprintf(worker->bgw_library_name, INFLUX_LIBRARY_NAME);
+  sprintf(worker->bgw_function_name, INFLUX_FUNCTION_NAME);
   snprintf(worker->bgw_name, BGW_MAXLEN, "Influx listener for schema %s",
-           get_namespace_name(args->namespace_id));
+           args->namespace);
   snprintf(worker->bgw_type, BGW_MAXLEN, "Influx line protocol listener");
-  worker->bgw_main_arg = MyDatabaseId;
   memcpy(worker->bgw_extra, args, sizeof(*args));
 }
-
-#define GET_FIELD(PTR, FLD) ((PTR) ? (PTR)->FLD : "<NULL>")
 
 /**
  * Main worker function.
@@ -124,29 +121,28 @@ static void WorkerInit(BackgroundWorker *worker, WorkerArgs *args) {
  * - Field `bgw_extra` will contain the worker arguments in a
  *   WorkerArgs structure.
  *
- * - The handle for the shared memory segment is passed as a parameter
- *   to this function.
+ * - The database identifier is passed as a parameter to this
+ *   function.
  */
-void WorkerMain(Datum arg) {
-  /* MTU for the wireless interface. We don't bother about digging up
-     the actual MTU here and just pick something that is common. */
-  const Oid database_id = DatumGetInt32(arg);
+void InfluxWorkerMain(Datum arg) {
   int sfd;
-  char buffer[1500];
+  char buffer[MTU];
   WorkerArgs *args = (WorkerArgs *)&MyBgworkerEntry->bgw_extra;
+  Oid namespace_id;
+  struct sockaddr_storage sockaddr;
 
   /* Establish signal handlers; once that's done, unblock signals. */
   pqsignal(SIGTERM, WorkerSigterm);
   pqsignal(SIGHUP, WorkerSighup);
   BackgroundWorkerUnblockSignals();
-
-  BackgroundWorkerInitializeConnectionByOid(database_id, InvalidOid, 0);
+  BackgroundWorkerInitializeConnection(args->database, args->role, 0);
 
   pgstat_report_activity(STATE_RUNNING, "initializing worker");
 
   CacheInit();
 
-  sfd = CreateSocket(NULL, args->service, &UdpRecvSocket, NULL, 0);
+  sfd = CreateSocket(NULL, args->service, &UdpRecvSocket,
+                     (struct sockaddr *)&sockaddr, sizeof(sockaddr));
   if (sfd == -1) {
     ereport(LOG, (errcode_for_socket_access(),
                   errmsg("could not create socket for service '%s': %m",
@@ -154,15 +150,25 @@ void WorkerMain(Datum arg) {
     proc_exit(1);
   }
 
-  ereport(LOG, (errmsg("worker initialized"),
-                errdetail("service=%s, database_id=%u, namespace_id=%u",
-                          args->service, database_id, args->namespace_id)));
-
   /* We need to start a transaction first because none is started and
      SPI_connect_ext might use TopTransactionContext, which is set by
      this function. The SPI_commit below will automatically start a
      new one. */
   StartTransactionCommand();
+
+  /* It is necessary to start a transaction before calling functions
+     like `get_namespace_oid`. Calling them before this will cause a
+     crash. */
+  namespace_id = get_namespace_oid(args->namespace, false);
+
+  ereport(LOG,
+          (errmsg("worker listening on port %d (service %s)",
+                  SocketPort((struct sockaddr *)&sockaddr, sizeof(sockaddr)),
+                  args->service),
+           errdetail("database=%s, namespace=%s, user=%s", args->database,
+                     args->namespace, args->role)));
+
+  pgstat_report_activity(STATE_RUNNING, "reading events");
 
   /* This is the same approach as used in pgstats.c: We read the
      packets in two loops. One outer that will block when there is no
@@ -212,7 +218,7 @@ void WorkerMain(Datum arg) {
                         errmsg("could not read lines: %m")));
       }
 
-      ProcessPacket(buffer, bytes, args->namespace_id);
+      ProcessPacket(buffer, bytes, namespace_id);
     }
 
     PopActiveSnapshot();
@@ -249,19 +255,17 @@ Datum worker_launch(PG_FUNCTION_ARGS) {
   BackgroundWorkerHandle *handle;
   BgwHandleStatus status;
   pid_t pid;
-  WorkerArgs args;
+  WorkerArgs args = {.service = service};
 
   /* Check that we have a valid namespace id */
   if (get_namespace_name(nspid) == NULL)
     ereport(ERROR, (errcode(ERRCODE_UNDEFINED_SCHEMA),
                     errmsg("schema with OID %d does not exist", nspid)));
 
-  /* Set up arguments to worker */
-  memset(&args, 0, sizeof(args));
-  strncpy(args.service, service, sizeof(args.service));
-  args.namespace_id = nspid;
+  args.namespace = get_namespace_name(nspid);
+  args.database = get_database_name(MyDatabaseId);
 
-  WorkerInit(&worker, &args);
+  InfluxWorkerInit(&worker, &args);
 
   /* set bgw_notify_pid so that we can use WaitForBackgroundWorkerStartup */
   worker.bgw_notify_pid = MyProcPid;

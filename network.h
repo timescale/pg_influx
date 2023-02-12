@@ -39,5 +39,6 @@ extern struct SocketMethod UdpSendSocket;
 extern int CreateSocket(const char* hostname, const char* service,
                         const struct SocketMethod*, struct sockaddr* addr,
                         socklen_t addrlen);
+extern int SocketPort(struct sockaddr* addr, socklen_t addrlen);
 
 #endif /* NETWORK_H_ */
