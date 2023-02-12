@@ -87,3 +87,10 @@ STRING_CHAR = ? any character except quote or backslash ?;
 LETTER = ? any letter ?;
 DIGIT = ? any digit ?;
 ```
+
+## InfluxDB Ports
+
+| Port | Protocol | Description                                           |
+|:-----|:---------|:------------------------------------------------------|
+| 8089 | UDP      | The default port that runs the UDP service.           |
+| 8086 | HTTP/TCP | The default port that runs the InfluxDB HTTP service. |
