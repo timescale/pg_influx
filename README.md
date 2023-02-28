@@ -11,6 +11,10 @@ including its intended use.
 
 [1]: https://dbmsdrops.kindahl.net/
 
+## Documentation
+
+- [Reference documentation](docs/reference.md)
+
 ## Building and Installing
 
 To install the dependencies it is easiest to install the [PGDG
