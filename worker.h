@@ -19,7 +19,19 @@
 
 #include <postgres.h>
 
-#define BGW_LIBRARY_NAME "influx"
-#define BGW_FUNCTION_NAME "WorkerMain"
+#include <postmaster/bgworker.h>
+
+#define INFLUX_LIBRARY_NAME "influx"
+#define INFLUX_FUNCTION_NAME "InfluxWorkerMain"
+
+typedef struct WorkerArgs {
+  const char *role;
+  const char *namespace;
+  const char *database;
+  const char *service;
+} WorkerArgs;
+
+void InfluxWorkerInit(BackgroundWorker *worker, WorkerArgs *args);
+void InfluxWorkerMain(Datum dbid) pg_attribute_noreturn();
 
 #endif /* WORKER_H_ */

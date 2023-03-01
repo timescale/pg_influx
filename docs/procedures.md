@@ -2,6 +2,8 @@
 
 ## Function `worker_launch`
 
+Launch a new background worker.
+
 ### Parameters
 
 |      Name | Type           | Description                         |
@@ -26,6 +28,8 @@ with [`pg_terminate_backend`][1] to terminate the backend.
 [1]: https://www.postgresql.org/docs/current/functions-admin.html#FUNCTIONS-ADMIN-SIGNAL-TABLE
 
 ## Procedure `send_packet`
+
+Send a UDP packet to a network address.
 
 ### Parameters
 
