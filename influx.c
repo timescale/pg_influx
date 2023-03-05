@@ -150,12 +150,19 @@ static void StartBackgroundWorkers(const char *database_name,
                                    const char *role_name,
                                    const char *service_name, int worker_count) {
   MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
-  WorkerArgs args = {.namespace = schema_name ? pstrdup(schema_name) : NULL,
-                     .database = database_name ? pstrdup(database_name) : NULL,
-                     .role = role_name ? pstrdup(role_name) : NULL,
-                     .service = service_name ? pstrdup(service_name) : NULL};
+  WorkerArgs args = {0};
   int i;
   BackgroundWorker worker;
+
+  if (schema_name)
+    strncpy(args.namespace, schema_name, sizeof(args.namespace));
+  if (database_name)
+    strncpy(args.database, database_name, sizeof(args.database));
+  if (role_name)
+    strncpy(args.role, role_name, sizeof(args.role));
+  if (service_name)
+    strncpy(args.service, service_name, sizeof(args.service));
+
   elog(LOG, "starting influx workers");
 
   InfluxWorkerInit(&worker, &args);

@@ -161,12 +161,13 @@ void InfluxWorkerMain(Datum arg) {
      crash. */
   namespace_id = get_namespace_oid(args->namespace, false);
 
-  ereport(LOG,
-          (errmsg("worker listening on port %d (service %s)",
-                  SocketPort((struct sockaddr *)&sockaddr, sizeof(sockaddr)),
-                  args->service),
-           errdetail("database=%s, namespace=%s, user=%s", args->database,
-                     args->namespace, args->role)));
+  ereport(
+      LOG,
+      (errmsg("worker listening on port %d",
+              SocketPort((struct sockaddr *)&sockaddr, sizeof(sockaddr))),
+       errdetail(
+           "Connected to database %s as user %s. Metrics written to schema %s.",
+           args->database, args->role, args->namespace)));
 
   pgstat_report_activity(STATE_RUNNING, "reading events");
 
@@ -255,15 +256,18 @@ Datum worker_launch(PG_FUNCTION_ARGS) {
   BackgroundWorkerHandle *handle;
   BgwHandleStatus status;
   pid_t pid;
-  WorkerArgs args = {.service = service};
+  WorkerArgs args = {0};
 
   /* Check that we have a valid namespace id */
   if (get_namespace_name(nspid) == NULL)
     ereport(ERROR, (errcode(ERRCODE_UNDEFINED_SCHEMA),
                     errmsg("schema with OID %d does not exist", nspid)));
 
-  args.namespace = get_namespace_name(nspid);
-  args.database = get_database_name(MyDatabaseId);
+  strncpy(args.role, GetUserNameFromId(GetUserId(), true), sizeof(args.role));
+  strncpy(args.service, service, sizeof(args.service));
+  strncpy(args.namespace, get_namespace_name(nspid), sizeof(args.namespace));
+  strncpy(args.database, get_database_name(MyDatabaseId),
+          sizeof(args.database));
 
   InfluxWorkerInit(&worker, &args);
 
@@ -293,8 +297,7 @@ Datum worker_launch(PG_FUNCTION_ARGS) {
              errhint("Kill all remaining database processes and restart the "
                      "database.")));
 
-  ereport(NOTICE,
-          (errmsg("background worker started"), errdetail("pid=%d", pid)));
+  ereport(LOG, (errmsg("background worker started"), errdetail("pid=%d", pid)));
 
   Assert(status == BGWH_STARTED);
   PG_RETURN_INT32(pid);
