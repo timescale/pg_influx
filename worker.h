@@ -25,10 +25,10 @@
 #define INFLUX_FUNCTION_NAME "InfluxWorkerMain"
 
 typedef struct WorkerArgs {
-  const char *role;
-  const char *namespace;
-  const char *database;
-  const char *service;
+  char role[32];
+  char namespace[32];
+  char database[32];
+  char service[32];
 } WorkerArgs;
 
 void InfluxWorkerInit(BackgroundWorker *worker, WorkerArgs *args);

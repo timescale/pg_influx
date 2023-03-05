@@ -256,15 +256,18 @@ Datum worker_launch(PG_FUNCTION_ARGS) {
   BackgroundWorkerHandle *handle;
   BgwHandleStatus status;
   pid_t pid;
-  WorkerArgs args = {.service = service};
+  WorkerArgs args = {0};
 
   /* Check that we have a valid namespace id */
   if (get_namespace_name(nspid) == NULL)
     ereport(ERROR, (errcode(ERRCODE_UNDEFINED_SCHEMA),
                     errmsg("schema with OID %d does not exist", nspid)));
 
-  args.namespace = get_namespace_name(nspid);
-  args.database = get_database_name(MyDatabaseId);
+  strncpy(args.role, GetUserNameFromId(GetUserId(), true), sizeof(args.role));
+  strncpy(args.service, service, sizeof(args.service));
+  strncpy(args.namespace, get_namespace_name(nspid), sizeof(args.namespace));
+  strncpy(args.database, get_database_name(MyDatabaseId),
+          sizeof(args.database));
 
   InfluxWorkerInit(&worker, &args);
 
