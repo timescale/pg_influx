@@ -80,9 +80,9 @@ struct SocketMethod UdpSendSocket = {
 int SocketPort(struct sockaddr* addr, socklen_t addrlen) {
   switch (addr->sa_family) {
     case AF_INET:
-      return ((struct sockaddr_in*)addr)->sin_port;
+      return ntohs(((struct sockaddr_in*)addr)->sin_port);
     case AF_INET6:
-      return ((struct sockaddr_in6*)addr)->sin6_port;
+      return ntohs(((struct sockaddr_in6*)addr)->sin6_port);
     default:
       return -1;
   }

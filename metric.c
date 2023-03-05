@@ -119,8 +119,6 @@ static void PrepareRecord(Relation rel, Oid *argtypes, PreparedInsert record) {
   const Oid relid = RelationGetRelid(rel);
   int i;
 
-  elog(NOTICE, "preparing statement for %s", SPI_getrelname(rel));
-
   /* Using the tuple descriptor and the parsed package, build the
    * insert statement and collect the null array for the prepare
    * call. */

@@ -5,7 +5,6 @@ CREATE TABLE db_worker.system(_time timestamp, host text, uptime int, _tags json
 \set VERBOSITY terse
 \x on
 SELECT pg_sleep(1) FROM worker_launch('db_worker', 4711::text);
-NOTICE:  background worker started
 -[ RECORD 1 ]
 pg_sleep | 
 

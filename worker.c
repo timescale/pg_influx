@@ -161,12 +161,13 @@ void InfluxWorkerMain(Datum arg) {
      crash. */
   namespace_id = get_namespace_oid(args->namespace, false);
 
-  ereport(LOG,
-          (errmsg("worker listening on port %d (service %s)",
-                  SocketPort((struct sockaddr *)&sockaddr, sizeof(sockaddr)),
-                  args->service),
-           errdetail("database=%s, namespace=%s, user=%s", args->database,
-                     args->namespace, args->role)));
+  ereport(
+      LOG,
+      (errmsg("worker listening on port %d",
+              SocketPort((struct sockaddr *)&sockaddr, sizeof(sockaddr))),
+       errdetail(
+           "Connected to database %s as user %s. Metrics written to schema %s.",
+           args->database, args->role, args->namespace)));
 
   pgstat_report_activity(STATE_RUNNING, "reading events");
 
@@ -293,8 +294,7 @@ Datum worker_launch(PG_FUNCTION_ARGS) {
              errhint("Kill all remaining database processes and restart the "
                      "database.")));
 
-  ereport(NOTICE,
-          (errmsg("background worker started"), errdetail("pid=%d", pid)));
+  ereport(LOG, (errmsg("background worker started"), errdetail("pid=%d", pid)));
 
   Assert(status == BGWH_STARTED);
   PG_RETURN_INT32(pid);
