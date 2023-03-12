@@ -219,18 +219,16 @@ void MetricInsert(Metric *metric, int nspid) {
   AttInMetadata *attinmeta;
   int err, i, natts;
 
-  /* Get tuple descriptor for metric table and parse all the data
-   * into values array. To do this, we open the table for access and
-   * keep it open until the end of the transaction. Otherwise, the
-   * table definition can change before we've had a chance to insert
-   * the data. */
-  relid = get_relname_relid(metric->name, nspid);
-
   /* If the table does not exist, we just skip the line silently. */
   relid = get_relname_relid(metric->name, nspid);
   if (relid == InvalidOid)
     return;
 
+  /* Get tuple descriptor for metric table and parse all the data
+   * into values array. To do this, we open the table for access and
+   * keep it open until the end of the transaction. Otherwise, the
+   * table definition can change before we've had a chance to insert
+   * the data. */
   rel = table_open(relid, AccessShareLock);
   attinmeta = TupleDescGetAttInMetadata(RelationGetDescr(rel));
   natts = attinmeta->tupdesc->natts;
