@@ -5,8 +5,12 @@
 
 #include <access/table.h>
 #include <catalog/pg_type.h>
+#include <commands/tablecmds.h>
 #include <executor/spi.h>
 #include <funcapi.h>
+#include <miscadmin.h>
+#include <nodes/makefuncs.h>
+#include <parser/parse_func.h>
 #include <utils/builtins.h>
 #if PG_VERSION_NUM < 150000
 #include <utils/int8.h>
@@ -15,9 +19,12 @@
 #include <utils/jsonb.h>
 #include <utils/lsyscache.h>
 #include <utils/rel.h>
+#include <utils/syscache.h>
 #include <utils/timestamp.h>
 
 #include "cache.h"
+
+PG_FUNCTION_INFO_V1(default_create);
 
 static void BuildFromCString(AttInMetadata *attinmeta, char *value, int attnum,
                              Datum *values, bool *nulls) {
@@ -210,7 +217,87 @@ bool CollectValues(Metric *metric, AttInMetadata *attinmeta, Oid *argtypes,
   return true;
 }
 
-void MetricInsert(Metric *metric, int nspid) {
+static ArrayType *MakeArrayFromCStringList(List *elems) {
+  ListCell *cell;
+  Datum *datum = palloc(sizeof(Datum) * list_length(elems));
+
+  foreach (cell, elems) {
+    const char *elem = (const char *)lfirst(cell);
+    Name name = palloc(NAMEDATALEN);
+    namestrcpy(name, elem);
+    datum[foreach_current_index(cell)] = NameGetDatum(name);
+  }
+
+  return construct_array(datum, list_length(elems), NAMEOID, NAMEDATALEN, false,
+                         TYPALIGN_CHAR);
+}
+
+/**
+ * Optionally create the metric table.
+ *
+ * The function looks for a procedure named `_create` in the same
+ * schema as the metrics and which accepts three parameters:
+ *
+ * 1. The name of the metric.
+ * 2. An array of tag names of the measurement just received.
+ * 3. An array of field names just received.
+ *
+ * @returns OID of created table, or InvalidOid if the table was not
+ * created.
+ */
+Oid MetricCreate(Metric *metric, Oid nspid) {
+  /*
+   * Fetch the function from the system table. We are looking for a
+   * function that accepts three parameters:
+   * 1. A Name, which is the metric name.
+   * 2. Array with tag names
+   * 3. Array with field names
+   */
+  Name metric_name;
+  Oid createoid, result;
+  ArrayType *tags_array, *fields_array;
+  Oid args[] = {NAMEOID, NAMEARRAYOID, NAMEARRAYOID};
+  char *namespace = get_namespace_name(nspid);
+  List *create_func = list_make2(makeString(namespace), makeString("_create"));
+
+  createoid =
+      LookupFuncName(create_func, sizeof(args) / sizeof(*args), args, true);
+
+  if (!OidIsValid(createoid))
+    return InvalidOid;
+
+  elog(DEBUG1, "found metric creation function \"%s\" with OID %d",
+       NameListToString(create_func), createoid);
+
+  if (get_func_rettype(createoid) != REGCLASSOID)
+    ereport(ERROR, (errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+                    errmsg("type input function \"%s\" must return type \"%s\"",
+                           NameListToString(create_func),
+                           format_type_be(REGCLASSOID))));
+
+  metric_name = palloc(NAMEDATALEN);
+  namestrcpy(metric_name, metric->name);
+  tags_array = MakeArrayFromCStringList(metric->tags);
+  fields_array = MakeArrayFromCStringList(metric->fields);
+  PG_TRY();
+  {
+    result = DatumGetObjectId(OidFunctionCall3(
+        createoid, NameGetDatum(metric_name), PointerGetDatum(tags_array),
+        PointerGetDatum(fields_array)));
+  }
+  PG_CATCH();
+  { result = InvalidOid; }
+  PG_END_TRY();
+  return result;
+}
+
+/*
+ * Insert a row in the metric table.
+ *
+ * If there is no table with the same name as the metric, an attempt
+ * will be made to create such a table.
+ */
+void MetricInsert(Metric *metric, Oid nspid) {
   Relation rel;
   Oid relid;
   Datum *values;
@@ -219,9 +306,15 @@ void MetricInsert(Metric *metric, int nspid) {
   AttInMetadata *attinmeta;
   int err, i, natts;
 
-  /* If the table does not exist, we just skip the line silently. */
+  /* Try to fetch the table. */
   relid = get_relname_relid(metric->name, nspid);
-  if (relid == InvalidOid)
+
+  /* If the table does not exist, we try to create the table. */
+  if (!OidIsValid(relid))
+    relid = MetricCreate(metric, nspid);
+
+  /* If that fails, we skip the line. */
+  if (!OidIsValid(relid))
     return;
 
   /* Get tuple descriptor for metric table and parse all the data
@@ -233,9 +326,9 @@ void MetricInsert(Metric *metric, int nspid) {
   attinmeta = TupleDescGetAttInMetadata(RelationGetDescr(rel));
   natts = attinmeta->tupdesc->natts;
 
-  values = (Datum *)palloc0(natts * sizeof(Datum));
-  nulls = (bool *)palloc0(natts * sizeof(bool));
-  argtypes = (Oid *)palloc(natts * sizeof(Oid));
+  values = palloc0(natts * sizeof(Datum));
+  nulls = palloc0(natts * sizeof(bool));
+  argtypes = palloc(natts * sizeof(Oid));
 
   if (CollectValues(metric, attinmeta, argtypes, values, nulls)) {
     PreparedInsert record;
@@ -246,7 +339,7 @@ void MetricInsert(Metric *metric, int nspid) {
     if (!FindOrAllocEntry(rel, &record))
       PrepareRecord(rel, argtypes, record);
 
-    cnulls = (char *)palloc(natts * sizeof(char));
+    cnulls = palloc(natts * sizeof(char));
     for (i = 0; i < natts; ++i)
       cnulls[i] = (nulls[i]) ? 'n' : ' ';
 
@@ -257,4 +350,20 @@ void MetricInsert(Metric *metric, int nspid) {
   }
 
   table_close(rel, NoLock);
+}
+
+Datum default_create(PG_FUNCTION_ARGS) {
+  Name metric = PG_GETARG_NAME(0);
+  Oid nspoid = get_func_namespace(fcinfo->flinfo->fn_oid);
+  CreateStmt *create = makeNode(CreateStmt);
+  ObjectAddress address;
+
+  create->relation =
+      makeRangeVar(get_namespace_name(nspoid), NameStr(*metric), -1);
+  create->tableElts =
+      list_make3(makeColumnDef("_time", TIMESTAMPTZOID, -1, InvalidOid),
+                 makeColumnDef("_tags", JSONBOID, -1, InvalidOid),
+                 makeColumnDef("_fields", JSONBOID, -1, InvalidOid));
+  address = DefineRelation(create, RELKIND_RELATION, GetUserId(), NULL, NULL);
+  return address.objectId;
 }
