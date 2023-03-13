@@ -1,0 +1,5 @@
+postgresql-15-pg-influx (0.3-1) UNRELEASED; urgency=medium
+
+  * Initial release. (Closes: #nnnn)  <nnnn is the bug number of your ITP>
+
+ -- Joachim Zobel <jz-2017@heute-morgen.de>  Thu, 23 Feb 2023 20:37:49 +0100

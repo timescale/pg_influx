@@ -1,0 +1,34 @@
+--- a/worker.c
++++ b/worker.c
+@@ -31,7 +31,7 @@
+ #include <utils/builtins.h>
+ #include <utils/elog.h>
+ #include <utils/guc.h>
+-#include <utils/int8.h>
++#include <common/int.h>
+ #include <utils/inval.h>
+ #include <utils/jsonb.h>
+ #include <utils/lsyscache.h>
+--- a/influx.c
++++ b/influx.c
+@@ -23,7 +23,7 @@
+ #include <executor/spi.h>
+ #include <funcapi.h>
+ #include <utils/builtins.h>
+-#include <utils/int8.h>
++#include <common/int.h>
+ #include <utils/jsonb.h>
+ #include <utils/timestamp.h>
+ 
+@@ -141,9 +141,9 @@
+   if (time_attnum > 0) {
+     /* If the type is not a timestamp type, we skip the line. Also if
+        we cannot parse the timestamp as an integer. */
+-    int64 value;
++    int64 value = pg_strtoint64(state->timestamp);
+     if (!is_timestamp_type(argtypes[time_attnum - 1]) ||
+-        !scanint8(state->timestamp, true, &value))
++        value == 0)
+       return false;
+     /* The timestamp is timestamp in nanosecond since UNIX epoch, so we convert
+        it to PostgreSQL timestamp in microseconds since PostgreSQL epoch. */

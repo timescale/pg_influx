@@ -1,0 +1,30 @@
+Source: postgresql-13-pg-influx
+Section: misc
+Priority: optional
+Maintainer: Joachim Zobel <jz-2017@heute-morgen.de>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13), 
+ postgresql-server-dev-all,
+ pandoc
+Standards-Version: 4.6.2
+Homepage: https://github.com/timescale/pg_influx
+Vcs-Browser: https://github.com/timescale/pg_influx
+Vcs-Git: https://github.com/timescale/pg_influx.git
+
+Package: postgresql-13-pg-influx
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ postgresql
+Description: InfluxDB Line Protocol Listener for PostgreSQL 
+ A simple InfluxDB line protocol listener.
+ .
+ This is a very basic example of an extension that listens for data on a socket
+ and writes it to the database.
+ .
+ It is an ongoing experimental work for educational purposes and as such there
+ are no guarantees regarding feasability for any specific purpose, including
+ its intended use.
+ 
