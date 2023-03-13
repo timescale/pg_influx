@@ -1,3 +1,4 @@
+CREATE EXTENSION influx;
 -- Expect 2016-06-13T17:43:50.1004002Z (from protocol specification)
 select * from parse_influx('cpu foo=12 1465839830100400200');
  _metric |             _time             | _tags |    _fields    
@@ -108,3 +109,4 @@ SELECT * FROM (SELECT parse_influx(line) FROM lines) x;
  (system,"Tue Nov 26 07:39:14 2019","{""host"": ""fury""}","{""uptime_format"": ""7 days,  0:47""}")
 (29 rows)
 
+DROP EXTENSION influx;

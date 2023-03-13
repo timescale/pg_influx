@@ -258,8 +258,9 @@ void InfluxWorkerMain(Datum arg) {
  * @param schema Schema name where tables for metrics are stored.
  */
 Datum worker_launch(PG_FUNCTION_ARGS) {
-  Oid nspid = PG_GETARG_OID(0);
-  char *service = text_to_cstring(PG_GETARG_TEXT_P(1));
+  Oid nspid = PG_NARGS() == 1 ? get_func_namespace(fcinfo->flinfo->fn_oid)
+                              : PG_GETARG_OID(0);
+  char *service = text_to_cstring(PG_GETARG_TEXT_P(PG_NARGS() == 1 ? 0 : 1));
   BackgroundWorker worker;
   BackgroundWorkerHandle *handle;
   BgwHandleStatus status;

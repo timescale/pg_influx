@@ -6,6 +6,10 @@ CREATE FUNCTION worker_launch(ns regnamespace, service text)
 RETURNS integer
 LANGUAGE C AS '$libdir/influx.so';
 
+CREATE FUNCTION worker_launch(service text)
+RETURNS integer
+LANGUAGE C AS '$libdir/influx.so';
+
 -- Send a packet over UDP to a host and service
 CREATE PROCEDURE send_packet(packet text, service text, hostname text = 'localhost')
 LANGUAGE C AS '$libdir/influx.so';
@@ -14,3 +18,7 @@ LANGUAGE C AS '$libdir/influx.so';
 CREATE FUNCTION parse_influx(text)
 RETURNS TABLE (_metric text, _time timestamp, _tags jsonb, _fields jsonb)
 LANGUAGE C AS '$libdir/influx.so';
+
+CREATE FUNCTION _create("metric" name, "tags" name[], "fields" name[])
+RETURNS regclass
+LANGUAGE C AS '$libdir/influx.so', 'default_create';

@@ -17,8 +17,7 @@ DATA = influx--0.4.sql
 MODULE_big = influx
 OBJS = influx.o worker.o network.o ingest.o cache.o metric.o
 
-REGRESS = parse worker inval
-REGRESS_OPTS += --load-extension=influx
+REGRESS = parse worker inval create
 
 package-version = $(shell git describe --long --match="v[0-9]*" | cut -d- -f1 | sed 's/^v//')
 dist-name = postgresql-pg-influx-$(package-version)

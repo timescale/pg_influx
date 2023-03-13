@@ -1,3 +1,5 @@
+CREATE EXTENSION influx;
+
 -- Expect 2016-06-13T17:43:50.1004002Z (from protocol specification)
 select * from parse_influx('cpu foo=12 1465839830100400200');
 
@@ -51,3 +53,5 @@ system,host=fury uptime_format="7 days,  0:47" 1574753954000000000
 \.
 
 SELECT * FROM (SELECT parse_influx(line) FROM lines) x;
+
+DROP EXTENSION influx;
