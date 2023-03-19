@@ -1,2 +1,0 @@
-version=4
-https://github.com/timescale/pg_influx/tags .*/v(.*).tar.gz
