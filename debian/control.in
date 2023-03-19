@@ -5,8 +5,7 @@ Maintainer: Joachim Zobel <jz-2017@heute-morgen.de>
 Rules-Requires-Root: no
 Build-Depends:
  debhelper-compat (= 13), 
- postgresql-server-dev-PGVERSION,
- pandoc
+ postgresql-server-dev-PGVERSION
 Standards-Version: 4.6.2
 Homepage: https://github.com/timescale/pg_influx
 Vcs-Browser: https://github.com/timescale/pg_influx

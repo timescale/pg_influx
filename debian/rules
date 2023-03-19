@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 
-# include /usr/share/postgresql-common/pgxs_debian_control.mk
+include /usr/share/postgresql-common/pgxs_debian_control.mk
 
 # See debhelper(7) (uncomment to enable).
 # Output every command that modifies files on the build system.
@@ -15,12 +15,6 @@
 #export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
 # Package maintainers to append LDFLAGS.
 #export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
-
-execute_after_dh_auto_build:
-	pandoc -o pg-influx.1 -s -t man debian/manpage.md
-
-execute_after_dh_clean:
-	rm -f pg-influx.1
 
 %:
 	dh $@

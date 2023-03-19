@@ -1,4 +1,4 @@
-postgresql-13-pg-influx (0.4) UNRELEASED; urgency=medium
+postgresql-15-pg-influx (0.4) UNRELEASED; urgency=medium
 
   * Initial release. (Closes: #nnnn)  <nnnn is the bug number of your ITP>
 
