@@ -33,7 +33,9 @@
 #include <utils/builtins.h>
 #include <utils/elog.h>
 #include <utils/guc.h>
+#if PG_VERSION_NUM < 150000
 #include <utils/int8.h>
+#endif
 #include <utils/jsonb.h>
 #include <utils/lsyscache.h>
 #include <utils/rel.h>
