@@ -1,0 +1,22 @@
+Source: postgresql-pg-influx
+Section: database
+Priority: optional
+Rules-Requires-Root: no
+Maintainer: Mats Kindahl <mats@kindahl.net>
+Build-Depends: debhelper-compat (= 12),
+               postgresql-all <!nocheck>,
+               postgresql-server-dev-all (>= 217~)
+Standards-Version: 4.5.0
+Homepage: https://github.com/timescale/pg_influx
+Vcs-Git: https://github.com/timescale/pg_influx.git
+Vcs-Browser: https://github.com/timescale/pg_influx
+Description: InfluxDB line protocol listener that can listen
+ on UDP ports and insert into PostgreSQL database tables.
+
+Package: postgresql-PGVERSION-pg-influx
+Section: database
+Architecture: any
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${postgresql:Depends}, ${shlibs:Depends}
+Description: InfluxDB line protocol listener that can listen
+ on UDP ports and insert into PostgreSQL database tables.

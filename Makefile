@@ -13,16 +13,25 @@
 # limitations under the License.
 
 EXTENSION = influx
-DATA = influx--0.3.sql
+DATA = influx--0.4.sql
 MODULE_big = influx
 OBJS = influx.o worker.o network.o ingest.o cache.o metric.o
 
 REGRESS = parse worker inval
 REGRESS_OPTS += --load-extension=influx
 
+package-version = $(shell git describe --long --match="v[0-9]*" | cut -d- -f1 | sed 's/^v//')
+dist-name = postgresql-pg-influx-$(package-version)
+dist-file = $(dist-name).tar.gz
+
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+
+# .gitattributes make sure that we do not include .github and other
+# directories that are part of the repository CI/CD.
+dist:
+	git archive --prefix=$(dist-name)/ --format=tar.gz -o $(dist-file) HEAD
 
 cache.o: cache.c cache.h
 influx.o: influx.c influx.h ingest.h metric.h worker.h
@@ -30,3 +39,4 @@ ingest.o: ingest.c ingest.h metric.h
 metric.o: metric.c metric.h cache.h
 network.o: network.c network.h
 worker.o: worker.c worker.h cache.h influx.h ingest.h metric.h network.h
+
