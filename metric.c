@@ -8,7 +8,9 @@
 #include <executor/spi.h>
 #include <funcapi.h>
 #include <utils/builtins.h>
+#if PG_VERSION_NUM < 150000
 #include <utils/int8.h>
+#endif
 #include <utils/inval.h>
 #include <utils/jsonb.h>
 #include <utils/lsyscache.h>
@@ -161,11 +163,25 @@ bool CollectValues(Metric *metric, AttInMetadata *attinmeta, Oid *argtypes,
     /* If the type is not a timestamp type, we skip the line. Also if
        we cannot parse the timestamp as an integer. */
     int64 value;
-    if (!is_timestamp_type(argtypes[time_attnum - 1]) ||
-        !scanint8(metric->timestamp, true, &value))
+
+    if (!is_timestamp_type(argtypes[time_attnum - 1]))
       return false;
-    /* The timestamp is timestamp in nanosecond since UNIX epoch, so we convert
-       it to PostgreSQL timestamp in microseconds since PostgreSQL epoch. */
+#if PG_VERSION_NUM < 150000
+    if (!scanint8(metric->timestamp, true, &value))
+      return false;
+#else
+    {
+      char *endptr;
+      errno = 0;
+      value = strtoi64(metric->timestamp, &endptr, 10);
+      if (errno != 0 || *endptr != '\0')
+        return false;
+    }
+#endif
+
+    /* The timestamp is timestamp in nanosecond since UNIX epoch, so we
+       convert it to PostgreSQL timestamp in microseconds since
+       PostgreSQL epoch. */
     value /= 1000;
     value -= USECS_PER_SEC *
              ((POSTGRES_EPOCH_JDATE - UNIX_EPOCH_JDATE) * SECS_PER_DAY);
