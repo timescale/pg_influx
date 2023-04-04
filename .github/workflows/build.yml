@@ -1,37 +1,49 @@
-name: Debug Build on ubuntu-${{ matrix.release }}
+name: Build and Test PostgreSQL ${{ matrix.version }}
 
 on:
   pull_request:
-    branches: [ master ]
-    paths-ignore:
-      - '**.md'
-      - LICENSE
-
+    branches: [main, master]
+  push:
+    branches: [main, master]
 jobs:
   build-ubuntu:
-    runs-on: ubuntu-${{ matrix.release }}
+    name: Build on PostgreSQL ${{ matrix.version }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        version: [11, 12, 13, 14, 15]
-        # We run on ubuntu-latest as well to capture when a new
-        # version is added.
-        release: [18.04, 20.04, 22.04, latest]
+        version: [13, 14]
+    container:
+      image: postgres:${{ matrix.version }}
     steps:
+    - name: Install dependencies
+      env:
+        DEBIAN_FRONTEND: noninteractiv
+      run: |
+        apt-get update
+        apt-get install -qy make gcc postgresql-server-dev-${{ matrix.version }} postgresql-client-${{ matrix.version }}
     - uses: actions/checkout@v2
-    - name: Setup PGDG
-      run: |
-        sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-        wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
-        sudo apt-get update
-    - name: Install PostgreSQL
-      run: sudo apt-get -y install cmake postgresql postgresql-server-dev-all postgresql-server-dev-${{ matrix.version }}
-    - name: Check that tools were successfully installed
-      run: |
-        pg_config
-        ls `pg_config --includedir-server`
     - name: Build extensions
       run: make
     - name: Install extensions
       run: make install
+    - name: Start PostgreSQL server
+      env:
+        POSTGRES_HOST_AUTH_METHOD: trust
+      run: gosu postgres docker-entrypoint.sh postgres >/var/log/postgresql/postgresql.log 2>&1 &
+    - name: Wait for server to start
+      env:
+        PGUSER: postgres
+      run: sleep 10 && pg_isready -t20
     - name: Run tests
+      env:
+        PGUSER: postgres
       run: make installcheck
+    - name: Show regressdiff
+      if: ${{ failure() }}
+      run: test -r regression.diffs && cat regression.diffs
+    - name: Archive production artifacts
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: postgresql-${{ matrix.version}}-${{ matrix.release }}-log
+        path: /var/log/postgresql
