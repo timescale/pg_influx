@@ -1,0 +1,22 @@
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+      - "CI/CD"
+  categories:
+    - title: Breaking Changes
+      labels:
+        - breaking-change
+    - title: New Features
+      labels:
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - bug
+    - title: Build and Packaging Improvements
+      labels:
+        - packaging
+        - build
+    - title: Other Changes
+      labels:
+        - "*"
