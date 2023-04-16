@@ -19,6 +19,7 @@ purpose, including its intended use.
 ## Documentation
 
 - [Documentation](docs/index.md)
+- [Contribution Guidelines](CONTRIBUTING.md)
 
 ## Building and Installing
 
