@@ -1,0 +1,39 @@
+name: Debuild Release
+on:
+  pull_request:
+    branches: [main, master]
+jobs:
+  debuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractiv
+        run: |
+          CODENAME=`lsb_release -cs`
+          curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          echo "deb http://apt.postgresql.org/pub/repos/apt $CODENAME-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -qy postgresql-server-dev-all postgresql-all equivs devscripts debmake
+      - uses: actions/checkout@v3
+      - name: Copy source to new directory
+        run: |
+          mkdir -p /tmp/pg-influx
+          rsync -Ca --exclude=.github/* ./ /tmp/pg-influx/
+      - name: Build unsigned package
+        env:
+          DEB_BUILD_OPTIONS: nocheck # Don't run tests. We only need that for the release.
+        run: |
+          cd /tmp/pg-influx
+          debmake -t -i "debuild -i -uc -us"
+      - name: List build artifacts
+        run: ls -l /tmp
+      - uses: actions/upload-artifact@v3
+        with:
+          name: debian
+          path: |
+            /tmp/postgresql-*pg-influx*.ddeb
+            /tmp/postgresql-*pg-influx*.deb
+            /tmp/postgresql-*pg-influx*.dsc
+            /tmp/postgresql-*pg-influx*.buildinfo
+            /tmp/postgresql-*pg-influx*.changes
