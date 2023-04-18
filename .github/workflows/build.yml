@@ -21,7 +21,7 @@ jobs:
       run: |
         apt-get update
         apt-get install -qy make gcc postgresql-server-dev-${{ matrix.version }} postgresql-client-${{ matrix.version }}
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Build extensions
       run: make
     - name: Install extensions
