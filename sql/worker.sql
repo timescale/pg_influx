@@ -5,7 +5,7 @@ CREATE TABLE db_worker.system(_time timestamp, host text, uptime int, _tags json
 
 \set VERBOSITY terse
 \x on
-SELECT pg_sleep(1) FROM worker_launch('db_worker', 4711::text);
+SELECT pg_sleep(1), pid worker_pid FROM worker_launch('db_worker', 4711::text) pid \gset
 CALL send_packet('cpu,cpu=cpu0,host=fury usage_system=2.0408163264927324,usage_user=2.0408163264927324 1574753954000000000', 4711::text);
 CALL send_packet('cpu,cpu=cpu1,host=fury usage_system=3.921568627286635,usage_user=3.9215686274649673 1574753954000000000', 4711::text);
 CALL send_packet('disk,device=nvme0n1p2,fstype=ext4,host=fury,mode=rw,path=/ free=912578965504i,total=1006530654208i,used=42751348736i,used_percent=4.475033200428718 1574753954000000000', 4711::text);
@@ -18,6 +18,13 @@ SELECT pg_sleep(2);
 SELECT * FROM db_worker.cpu;
 SELECT * FROM db_worker.disk;
 SELECT * FROM db_worker.system;
+
+SELECT count(*) FROM pg_stat_activity WHERE pid = :worker_pid;
+-- Syntax error, but the worker should not stop
+CALL send_packet('system,host=fury', 4711::text);
+SELECT pg_sleep(1);
+SELECT count(*) FROM pg_stat_activity WHERE pid = :worker_pid;
+
 SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE backend_type like '%Influx%';
 
 DROP TABLE db_worker.cpu;

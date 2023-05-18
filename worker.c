@@ -72,7 +72,13 @@ static void ProcessPacket(char *buffer, size_t bytes, Oid nspid) {
   state = ParseInfluxSetup(buffer);
 
   while (true) {
-    if (!IngestReadNextLine(state))
+    bool result;
+    PG_TRY();
+    { result = IngestReadNextLine(state); }
+    PG_CATCH();
+    { result = false; }
+    PG_END_TRY();
+    if (!result)
       return;
     MetricInsert(&state->metric, nspid);
   }
