@@ -1,14 +1,26 @@
 # Getting Started with the Influx Listener
 
 The easiest way to get started with the Influx Listener is to install
-it in a schema and launch a worker process.
+it in a schema and launch a worker process for that schema.
 
 ```sql
 CREATE EXTENSION influx WITH SCHEMA metrics;
-SELECT worker_launch('metrics', '8089');
+SELECT metrics.worker_launch('8089');
 ```
 
-This will spawn a single worker that will listen to socket 8089.
+This will spawn a single worker that will listen to socket 8089. The
+`worker_launch` procedure will assume that the worker is for that
+schema.
+
+> **NOTE:** PostgreSQL does not allow installing an extension multiple
+> times in the same database, so you cannot use this method to launch
+> workers for different schema. If you want to do that, you need to
+> use the [2-argument version of `worker_launch`][1]. If you do that,
+> however, you will not be able to start workers automatically in the
+> background since you can (currently) only give one schema for the
+> workers and not have several workers writing to different schema.
+
+[1]: procedures.md#function-worker_launch
 
 ## Automatically starting listeners
 
@@ -24,3 +36,11 @@ influx.database = my_database
 influx.role = influx       # defaults to superuser
 influx.workers = 10        # defaults to 4
 ```
+
+> **NOTE:** When pre-loading the library, it will not create the
+> schema nor add functions (such as [`_create`][2]) to the schema, so
+> before editing the configuration file, you should create the
+> extension in the database and schema that you want to use as
+> explained above.
+
+[2]: procedures.md#function-_create
