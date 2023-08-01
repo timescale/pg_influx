@@ -14,19 +14,19 @@ postgresql-pg-influx (0.4-1) UNRELEASED; urgency=low
 
  -- Mats Kindahl <mats@timescale.com>  Wed, 15 Mar 2023 23:05:56 +0100
 
-postgresql-pg-influx (0.3-1) UNRELEASED; urgency=low
+postgresql-pg-influx (0.3-0) jammy; urgency=low
 
   * Add cache for prepared insert statements.
 
  -- Mats Kindahl <mats@timescale.com>  Sat, 21 May 2022 23:23:55 +0200
 
-postgresql-pg-influx (0.2-1) UNRELEASED; urgency=low
+postgresql-pg-influx (0.2-0) jammy; urgency=low
 
   * Use prepared statements for insertion.
 
  -- Mats Kindahl <mats@timescale.com>  Thu, 26 May 2022 23:08:45 +0200
 
-postgresql-pg-influx (0.1-1) UNRELEASED; urgency=low
+postgresql-pg-influx (0.1-0) jammy; urgency=low
 
   * UDP listener to receive data.
   * InfluxDB line protocol parser.
