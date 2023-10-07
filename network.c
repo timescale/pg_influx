@@ -149,8 +149,8 @@ int CreateSocket(const char* hostname, const char* service,
   return STATUS_ERROR;
 }
 
-PG_FUNCTION_INFO_V1(send_packet);
-Datum send_packet(PG_FUNCTION_ARGS) {
+PG_FUNCTION_INFO_V1(send_udp_packet);
+Datum send_udp_packet(PG_FUNCTION_ARGS) {
   struct sockaddr_storage serveraddr;
   const char* hostname = text_to_cstring(PG_GETARG_TEXT_P(2));
   const char* service = text_to_cstring(PG_GETARG_TEXT_P(1));

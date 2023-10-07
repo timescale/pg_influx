@@ -5,22 +5,23 @@ it in a schema and launch a worker process for that schema.
 
 ```sql
 CREATE EXTENSION influx WITH SCHEMA metrics;
-SELECT metrics.worker_launch('8089');
+SELECT metrics.launch_udp_worker('8089');
 ```
 
 This will spawn a single worker that will listen to socket 8089. The
-`worker_launch` procedure will assume that the worker is for that
+`launch_udp_worker` procedure will assume that the worker is for that
 schema.
 
 > **NOTE:** PostgreSQL does not allow installing an extension multiple
 > times in the same database, so you cannot use this method to launch
 > workers for different schema. If you want to do that, you need to
-> use the [2-argument version of `worker_launch`][1]. If you do that,
-> however, you will not be able to start workers automatically in the
-> background since you can (currently) only give one schema for the
-> workers and not have several workers writing to different schema.
+> use the [2-argument version of `launch_udp_worker`][1]. If you do
+> that, however, you will not be able to start workers automatically
+> in the background since you can (currently) only give one schema for
+> the workers and not have several workers writing to different
+> schema.
 
-[1]: procedures.md#function-worker_launch
+[1]: procedures.md#function-launch_udp_worker
 
 ## Automatically starting listeners
 

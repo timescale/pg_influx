@@ -2,13 +2,13 @@
 
 ## Table of Contents
 
-1. [Procedure `send_packet`](#procedure-send_packet)
-2. [Function `worker_launch`](#function-worker_launch)
+1. [Procedure `send_udp_packet`](#procedure-send_udp_packet)
+2. [Function `launch_udp_worker`](#function-launch_udp_worker)
 3. [Function `_create`](#function-_create)
 
-## Function `worker_launch`
+## Function `launch_udp_worker`
 
-Launch a new background worker.
+Launch a new UDP background worker.
 
 The service is looked up using `getaddrinfo` so it is possible to
 either provide a port number of service name that will be translated
@@ -39,7 +39,7 @@ If you have installed the extension in the schema `metrics` you can
 spawn a worker listening on socket 8089 using:
 
 ```sql
-SELECT metrics.worker_launch('8089');
+SELECT metrics.launch_udp_worker('8089');
 ```
 
 If you have installed the extension in the `public` schema (which is
@@ -47,21 +47,21 @@ the default if you do not give a schema when using [`CREATE
 EXTENSION`]()) you can start a worker using:
 
 ```sql
-SELECT worker_launch('metrics', '8089');
+SELECT launch_udp_worker('metrics', '8089');
 ```
 
 If you want to terminate a previously started worker, you can save the
 PID in a `psql` variable:
 
 ```sql
-SELECT metrics.worker_launch('8089') as pid \gset
+SELECT metrics.launch_udp_worker('8089') as pid \gset
    .
    .
    .
 SELECT pg_terminate_backend(:pid);
 ```
 
-## Procedure `send_packet`
+## Procedure `send_udp_packet`
 
 Send a UDP packet to a network address.
 

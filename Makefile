@@ -15,7 +15,7 @@
 EXTENSION = influx
 DATA = influx--0.4.sql
 MODULE_big = influx
-OBJS = influx.o worker.o network.o ingest.o cache.o metric.o
+OBJS = influx.o worker.o network.o ingest.o cache.o metric.o guc.o udp.o
 
 REGRESS = parse worker inval create
 
@@ -33,9 +33,10 @@ dist:
 	git archive --prefix=$(dist-name)/ --format=tar.gz -o $(dist-file) HEAD
 
 cache.o: cache.c cache.h
-influx.o: influx.c influx.h ingest.h metric.h worker.h
+guc.o: guc.c guc.h
+influx.o: influx.c influx.h ingest.h metric.h guc.h udp.h worker.h
 ingest.o: ingest.c ingest.h metric.h
-metric.o: metric.c metric.h cache.h
+metric.o: metric.c metric.h cache.h worker.h
 network.o: network.c network.h
-worker.o: worker.c worker.h cache.h influx.h ingest.h metric.h network.h
-
+udp.o: udp.c udp.h worker.h guc.h network.h
+worker.o: worker.c worker.h cache.h influx.h ingest.h metric.h
