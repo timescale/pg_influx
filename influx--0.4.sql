@@ -2,16 +2,16 @@
 \echo Use "CREATE EXTENSION influx" to load this file. \quit
 
 -- Launch a new worker that listens on a port and writes to a namespace
-CREATE FUNCTION worker_launch(ns regnamespace, service text)
+CREATE FUNCTION launch_udp_worker(ns regnamespace, service text)
 RETURNS integer
 LANGUAGE C AS '$libdir/influx.so';
 
-CREATE FUNCTION worker_launch(service text)
+CREATE FUNCTION launch_udp_worker(service text)
 RETURNS integer
 LANGUAGE C AS '$libdir/influx.so';
 
 -- Send a packet over UDP to a host and service
-CREATE PROCEDURE send_packet(packet text, service text, hostname text = 'localhost')
+CREATE PROCEDURE send_udp_packet(packet text, service text, hostname text = 'localhost')
 LANGUAGE C AS '$libdir/influx.so';
 
 -- Parse InfluxDB Line Protocol packet

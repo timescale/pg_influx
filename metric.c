@@ -23,6 +23,7 @@
 #include <utils/timestamp.h>
 
 #include "cache.h"
+#include "worker.h"
 
 PG_FUNCTION_INFO_V1(default_create);
 
@@ -245,7 +246,7 @@ static ArrayType *MakeArrayFromCStringList(List *elems) {
  * @returns OID of created table, or InvalidOid if the table was not
  * created.
  */
-Oid MetricCreate(Metric *metric, Oid nspid) {
+Oid MetricCreate(Metric *metric) {
   /*
    * Fetch the function from the system table. We are looking for a
    * function that accepts three parameters:
@@ -257,7 +258,7 @@ Oid MetricCreate(Metric *metric, Oid nspid) {
   Oid createoid, result;
   ArrayType *tags_array, *fields_array;
   Oid args[] = {NAMEOID, NAMEARRAYOID, NAMEARRAYOID};
-  char *namespace = get_namespace_name(nspid);
+  char *namespace = get_namespace_name(NamespaceOid);
   List *create_func = list_make2(makeString(namespace), makeString("_create"));
 
   createoid =
@@ -297,7 +298,7 @@ Oid MetricCreate(Metric *metric, Oid nspid) {
  * If there is no table with the same name as the metric, an attempt
  * will be made to create such a table.
  */
-void MetricInsert(Metric *metric, Oid nspid) {
+void MetricInsert(Metric *metric) {
   Relation rel;
   Oid relid;
   Datum *values;
@@ -307,11 +308,11 @@ void MetricInsert(Metric *metric, Oid nspid) {
   int err, i, natts;
 
   /* Try to fetch the table. */
-  relid = get_relname_relid(metric->name, nspid);
+  relid = get_relname_relid(metric->name, NamespaceOid);
 
   /* If the table does not exist, we try to create the table. */
   if (!OidIsValid(relid))
-    relid = MetricCreate(metric, nspid);
+    relid = MetricCreate(metric);
 
   /* If that fails, we skip the line. */
   if (!OidIsValid(relid))
@@ -354,12 +355,11 @@ void MetricInsert(Metric *metric, Oid nspid) {
 
 Datum default_create(PG_FUNCTION_ARGS) {
   Name metric = PG_GETARG_NAME(0);
-  Oid nspoid = get_func_namespace(fcinfo->flinfo->fn_oid);
   CreateStmt *create = makeNode(CreateStmt);
   ObjectAddress address;
 
   create->relation =
-      makeRangeVar(get_namespace_name(nspoid), NameStr(*metric), -1);
+      makeRangeVar(get_namespace_name(NamespaceOid), NameStr(*metric), -1);
   create->tableElts =
       list_make3(makeColumnDef("_time", TIMESTAMPTZOID, -1, InvalidOid),
                  makeColumnDef("_tags", JSONBOID, -1, InvalidOid),

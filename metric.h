@@ -45,8 +45,8 @@ typedef struct Metric {
   List *fields;
 } Metric;
 
-Oid MetricCreate(Metric *metric, Oid nspid);
-void MetricInsert(Metric *metric, Oid nspid);
+Oid MetricCreate(Metric *metric);
+void MetricInsert(Metric *metric);
 bool CollectValues(Metric *metric, AttInMetadata *attinmeta, Oid *argtypes,
                    Datum *values, bool *nulls);
 
