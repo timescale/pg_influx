@@ -131,7 +131,7 @@ TABLE`:
 
 ```sql
 ALTER EXTENSION influx DROP FUNCTION metric._create;
-DROP FUNCTION db_create._create;
+DROP FUNCTION metric._create;
 ```
 
 To use a function that creates a table that just creates the `_fields`
@@ -141,8 +141,8 @@ column as a JSON (not JSONB) you can use the following definition:
 CREATE OR REPLACE FUNCTION metrics._create(metric name, tags name[], fields name[])
 RETURNS regclass AS $$
 BEGIN
-   EXECUTE format('CREATE TABLE db_create.%I (_time timestamp, _fields json)', metric);
-   RETURN format('db_create.%I', metric)::regclass;
+   EXECUTE format('CREATE TABLE metric.%I (_time timestamp, _fields json)', metric);
+   RETURN format('metric.%I', metric)::regclass;
 END;
 $$ LANGUAGE plpgsql;
 ```
