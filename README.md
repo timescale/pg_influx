@@ -36,6 +36,8 @@ sudo apt-get update
 sudo apt-get -y install postgresql postgresql-server-dev-13
 ```
 
+### Building from source
+
 After the dependencies are installed, you can download the repository
 from GitHub.
 
@@ -44,10 +46,7 @@ git clone git@github.com:mkindahl/pg_influx.git
 cd pg_influx
 ```
 
-### Building from source
-
-After the dependencies are installed, To build and install the
-extension:
+To build and install the extension:
 
 ```bash
 make
@@ -71,6 +70,15 @@ If you want to build unsigned packages, you can do that using
 
 ```bash
 debmake -t -i "debuild -i -uc -us"
+```
+
+### Adding PostgreSQL versions
+
+If a new version of PostgreSQL is supported, it is necessary to
+rebuild the `debian/control` file from the `debian/control.in` file.
+
+```bash
+pg_buildext updatecontrol
 ```
 
 ## Running Regression Tests

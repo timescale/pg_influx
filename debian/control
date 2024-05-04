@@ -36,3 +36,11 @@ Multi-Arch: foreign
 Depends: ${misc:Depends}, ${postgresql:Depends}, ${shlibs:Depends}
 Description: InfluxDB line protocol listener that can listen
  on UDP ports and insert into PostgreSQL database tables.
+
+Package: postgresql-16-pg-influx
+Section: database
+Architecture: any
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${postgresql:Depends}, ${shlibs:Depends}
+Description: InfluxDB line protocol listener that can listen
+ on UDP ports and insert into PostgreSQL database tables.
