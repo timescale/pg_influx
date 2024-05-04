@@ -32,6 +32,7 @@ typedef struct WorkerArgs {
 } WorkerArgs;
 
 void InfluxWorkerInit(BackgroundWorker *worker, WorkerArgs *args);
-void InfluxWorkerMain(Datum dbid) pg_attribute_noreturn();
+
+void PGDLLEXPORT InfluxWorkerMain(Datum dbid) pg_attribute_noreturn();
 
 #endif /* WORKER_H_ */

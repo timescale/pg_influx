@@ -41,7 +41,7 @@ PG_MODULE_MAGIC;
 
 PG_FUNCTION_INFO_V1(parse_influx);
 
-void _PG_init(void);
+void PGDLLEXPORT _PG_init(void);
 
 /** Number of Influx protocol workers. */
 static int InfluxWorkersCount;
@@ -141,7 +141,7 @@ Datum parse_influx(PG_FUNCTION_ARGS) {
   if (tuple == NULL)
     SRF_RETURN_DONE(funcctx);
 
-  SRF_RETURN_NEXT(funcctx, PointerGetDatum(HeapTupleGetDatum(tuple)));
+  SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
 }
 
 static void StartBackgroundWorkers(const char *database_name,
