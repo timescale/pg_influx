@@ -20,7 +20,7 @@ jobs:
         DEBIAN_FRONTEND: noninteractiv
       run: |
         apt-get update
-        apt-get install -qy make gcc postgresql-server-dev-${{ matrix.version }} postgresql-client-${{ matrix.version }}
+        apt-get install -qy make gcc postgresql-server-dev-${{ matrix.version }}
     - uses: actions/checkout@v3
     - name: Build extensions
       run: make
@@ -33,7 +33,11 @@ jobs:
     - name: Wait for server to start
       env:
         PGUSER: postgres
-      run: sleep 10 && pg_isready -t20
+        PGHOST: localhost
+      run: |
+        sleep 10
+        tail /var/log/postgresql/postgresql.log
+        pg_isready --timeout=20
     - name: Run tests
       env:
         PGUSER: postgres

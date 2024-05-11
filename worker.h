@@ -19,10 +19,14 @@
 
 #include <postgres.h>
 
+#include <funcapi.h>
+#include <miscadmin.h>
 #include <postmaster/bgworker.h>
 
 #define INFLUX_LIBRARY_NAME "influx"
-#define INFLUX_FUNCTION_NAME "InfluxWorkerMain"
+/* MTU for the wireless interface. We don't bother about digging up
+ * the actual MTU here and just pick something that is common. */
+#define INFLUX_MTU 1500
 
 typedef struct WorkerArgs {
   char role[32];
@@ -34,5 +38,15 @@ typedef struct WorkerArgs {
 void InfluxWorkerInit(BackgroundWorker *worker, WorkerArgs *args);
 
 void PGDLLEXPORT InfluxWorkerMain(Datum dbid) pg_attribute_noreturn();
+
+void InfluxWorkerSetup(WorkerArgs *args);
+void InfluxProcessPacket(char *buffer, size_t bytes);
+
+/*
+ * Variables that are shared between all workers.
+ */
+extern volatile sig_atomic_t ReloadConfig;
+extern volatile sig_atomic_t ShutdownWorker;
+extern Oid NamespaceOid;
 
 #endif /* WORKER_H_ */
